@@ -3,10 +3,11 @@
 #pragma once
 
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#define GLM_SWIZZLE_XYZW
+#define GLM_ENABLE_EXPERIMENTAL
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/rotate_vector.hpp>
 
 using namespace glm;
 

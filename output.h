@@ -1,6 +1,6 @@
 #include <vector>
 
-#include "structs.h"
+#include "dataTypes.h"
 
 using namespace glm;
 

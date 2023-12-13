@@ -1,6 +1,6 @@
 #include <cstdlib>
 
-#include "structs.h"
+#include "dataTypes.h"
 
 const double INV_MAX_UINT32{1.0 / 4294967296.0};
 

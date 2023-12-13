@@ -52,7 +52,7 @@ void render(const std::vector<Triangle>& scene, const Camera& camera, const vec2
       t = intersect(ray, triangle);
       if (t > 0.0f && t < ray.t) {
         ray.t = t;
-        image[i] = vec3(1, 0, 0);
+        image[i] = vec3(0.95);
       }
     }
   }
@@ -83,12 +83,19 @@ int main() {
   std::vector<Triangle> scene{128};
 
   vec3 p{};
+  vec3 angle{};
 
   for (auto& triangle : scene) {
-    p = 10.0f * (2.0f * getRandomPoint(rngState) - 1.0f);
-    triangle.v0 = p + vec3(0.01f, 0.0f, 0.0f);
-    triangle.v1 = p + vec3(-0.5f, 1.0f, 0.0f);
-    triangle.v2 = p + vec3(-1.0f, -1.0f, 0.0f);
+    p = 6.0f * (2.0f * getRandomPoint(rngState) - 1.0f);
+    angle = 10.0f * getRandomPoint(rngState);
+
+    triangle.v0 = vec3(0.0f, 0.0f, 0.0f);
+    triangle.v1 = vec3(-0.5f, 1.0f, 0.0f);
+    triangle.v2 = vec3(-1.0f, -1.0f, 0.0f);
+
+    triangle.v0 = p + rotateX(triangle.v0, angle.x);
+    triangle.v1 = p + rotateY(triangle.v1, angle.y);
+    triangle.v2 = p + rotateZ(triangle.v2, angle.z);
   }
 
   const auto start{std::chrono::steady_clock::now()};
