@@ -2,11 +2,12 @@
 
 #include <chrono>
 #include <cstdlib>
-#include <glm/glm.hpp>
 #include <iostream>
 #include <vector>
 
-#include "output.hpp"
+#include "intersection.h"
+#include "output.h"
+#include "random.h"
 
 using namespace glm;
 
@@ -18,58 +19,88 @@ void traverseBVH(const BVH* bvh) {
 // Generate default ray for a fragment based on its position, the image and the camera
 vec3 rayDirection(const vec2& resolution, float fieldOfView, const vec2& fragCoord) {
   vec2 xy = fragCoord - 0.5f * resolution;
-  float z = (0.5f * resolution.y) / (0.5f * tan(radians(fieldOfView)));
+  float z = (0.5f * resolution.y) / tan(0.5f * radians(fieldOfView));
   return normalize(vec3(xy, -z));
+}
+
+mat3 viewMatrix(vec3 camera, vec3 at, vec3 up) {
+  vec3 zaxis = normalize(at - camera);
+  vec3 xaxis = normalize(cross(zaxis, up));
+  vec3 yaxis = cross(xaxis, zaxis);
+
+  return mat3(xaxis, yaxis, -zaxis);
 }
 
 //-------------------------- Render ---------------------------
 
-void renderTile(const std::vector<vec3>& target, const Extent& extent) {
+void renderTile(const std::vector<vec3>& image, const Extent& extent) {
 }
 
-void render(const Camera& camera, const vec2& resolution, std::vector<vec3>& target) {
-  Ray ray{camera.position, vec3{0, 0, -1}, 0.0f};
+void render(const std::vector<Triangle>& scene, const Camera& camera, const vec2& resolution, std::vector<vec3>& image) {
+  Ray ray{camera.position, vec3{}, 0.0f};
   vec2 fragCoord{};
 
-  for (int i = 0; i < target.size(); i++) {
-    fragCoord = {std::fmod(i, resolution.x), std::floor(i / resolution.y)};
+  for (int i = 0; i < image.size(); i++) {
+    fragCoord = {std::fmod(i, resolution.x), std::floor((float)(i) / resolution.x)};
     ray.direction = rayDirection(resolution, camera.fieldOfView, fragCoord);
-    ray.direction = lookAt(camera.position, vec3{0}, camera.up) * vec4{ray.direction, 0.0};
+    ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
+    ray.t = INT_MAX;
 
-    target[i] = 0.5f + 0.5f * ray.direction;
+    image[i] = 0.5f + 0.5f * ray.direction;
+    float t{};
+    for (auto& triangle : scene) {
+      t = intersect(ray, triangle);
+      if (t > 0.0f && t < ray.t) {
+        ray.t = t;
+        image[i] = vec3(1, 0, 0);
+      }
+    }
   }
 }
 
 int main() {
+  uint rngState{4097};
+
   const uint width{512};
   const uint height{256};
 
   const vec2 resolution{width, height};
 
-  std::vector<vec3> target(width * height);
+  std::vector<vec3> image(width * height);
 
   // Initialize data to black
-  for (auto& v : target) {
+  for (auto& v : image) {
     v = vec3{0};
   }
 
-  vec3 cameraPosition = vec3{1, 1, -1};
+  vec3 cameraPosition = vec3{0, 0, 10};
   Camera camera{
       .position = cameraPosition,
       .target = vec3{0},
       .up = normalize(vec3{0, 1, 0}),
       .fieldOfView = 65.0f};
 
+  std::vector<Triangle> scene{128};
+
+  vec3 p{};
+
+  for (auto& triangle : scene) {
+    p = 10.0f * (2.0f * getRandomPoint(rngState) - 1.0f);
+    triangle.v0 = p + vec3(0.01f, 0.0f, 0.0f);
+    triangle.v1 = p + vec3(-0.5f, 1.0f, 0.0f);
+    triangle.v2 = p + vec3(-1.0f, -1.0f, 0.0f);
+  }
+
   const auto start{std::chrono::steady_clock::now()};
 
-  render(camera, resolution, target);
+  render(scene, camera, resolution, image);
 
   const auto end{std::chrono::steady_clock::now()};
   const std::chrono::duration<double> elapsed_seconds{end - start};
 
-  std::cout << "Time: " << std::floor(elapsed_seconds.count() * 1e4) / 1e4 << " s\n";
+  std::cout << "Time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
-  outputToFile(resolution, target);
+  outputToFile(resolution, image);
 
   return EXIT_SUCCESS;
 }

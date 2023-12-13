@@ -1,7 +1,9 @@
 // Used and imported geometric and data structures
 
+#pragma once
+
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_SWIZZLE_XYZW
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -19,12 +21,11 @@ struct AABB {
   vec3 min{};
   vec3 max{};
 };
-
-/* 3D geometry primitive */
 struct Triangle {
-  vec3 a{};
-  vec3 b{};
-  vec3 c{};
+  vec3 v0{};
+  vec3 v1{};
+  vec3 v2{};
+  // Location for spatial sorting
   vec3 centroid{};
 };
 
@@ -35,7 +36,7 @@ struct BVH {
   Triangle* triangle = nullptr;
 };
 
-/* 3D vector with origin, direction and length */
+/* 3D vector with origin, direction and intersection position t */
 struct Ray {
   vec3 origin{};
   vec3 direction{};

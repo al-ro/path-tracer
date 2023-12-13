@@ -1,6 +1,4 @@
-#include <vector>
-
-#include "structs.h"
+#include "output.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "lib/stb_image_write.h"
@@ -14,7 +12,7 @@ vec3 saturate(const vec3& v) {
       std::clamp(v.b, 0.0f, 1.0f)};
 }
 
-void outputToFile(const vec2& resolution, const std::vector<vec3>& target) {
+void outputToFile(const vec2& resolution, const std::vector<vec3>& image) {
   std::vector<uint8_t> bmpData(resolution.x * resolution.y * 3);
 
   uint outIdx = 0;
@@ -23,7 +21,7 @@ void outputToFile(const vec2& resolution, const std::vector<vec3>& target) {
     for (int j = 0; j < resolution.x; j++) {
       uint idx = (resolution.y - 1u - i) * resolution.x + j;
 
-      vec3 data = saturate(target[idx]);
+      vec3 data = saturate(image[idx]);
 
       bmpData[outIdx++] = (uint8_t)(data.r * 255.0);
       bmpData[outIdx++] = (uint8_t)(data.g * 255.0);

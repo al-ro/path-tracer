@@ -1,6 +1,6 @@
 # Path Tracer
 
-Simple C++ path tracer with bounding volume hierarchy (BVH) following https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+Basic C++ path tracer with bounding volume hierarchy (BVH) following https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
 
 
 ![Output](output.bmp)
