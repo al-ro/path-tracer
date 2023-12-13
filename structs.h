@@ -6,24 +6,26 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+using namespace glm;
+
 /* 2D section of render target */
 struct Extent {
-  glm::vec2 min{};
-  glm::vec2 max{};
+  vec2 min{};
+  vec2 max{};
 };
 
 /* Axis aligned bounding box */
 struct AABB {
-  glm::vec3 min{};
-  glm::vec3 max{};
+  vec3 min{};
+  vec3 max{};
 };
 
 /* 3D geometry primitive */
 struct Triangle {
-  glm::vec3 a{};
-  glm::vec3 b{};
-  glm::vec3 c{};
-  glm::vec3 centroid{};
+  vec3 a{};
+  vec3 b{};
+  vec3 c{};
+  vec3 centroid{};
 };
 
 /* Bounding volume hierarchy node */
@@ -35,7 +37,17 @@ struct BVH {
 
 /* 3D vector with origin, direction and length */
 struct Ray {
-  glm::vec3 origin{};
-  glm::vec3 direction{};
+  vec3 origin{};
+  vec3 direction{};
+  // Distance along ray where an intersection occurs
   float t{};
+};
+
+struct Camera {
+  vec3 position{};
+  // Location camera is looking at
+  vec3 target{};
+  vec3 up{};
+  // FOV in degrees
+  float fieldOfView{};
 };
