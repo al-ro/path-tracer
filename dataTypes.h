@@ -19,9 +19,21 @@ struct Extent {
 
 /* Axis aligned bounding box */
 struct AABB {
-  vec3 min{};
-  vec3 max{};
+  vec3 min{FLT_MAX};
+  vec3 max{-FLT_MAX};
+
+  // Increase AABB dimensions by including new point p
+  void grow(vec3 p) {
+    min = glm::min(min, p);
+    max = glm::max(max, p);
+  }
+  // Return surface are 2xy * 2xz * 2yz
+  float area() {
+    vec3 dim = max - min;
+    return 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);
+  }
 };
+
 struct Triangle {
   vec3 v0{};
   vec3 v1{};

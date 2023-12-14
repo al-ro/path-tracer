@@ -47,29 +47,67 @@ void updateNodeBounds(BVHNode& node,
   }
 }
 
+// Determine triangle counts and bounds for given split candidate
+float evaluateSAH(BVHNode& node, int axis, float pos,
+                  const std::vector<Triangle>& scene,
+                  std::vector<uint>& sceneIndices) {
+  AABB leftBox{};
+  AABB rightBox{};
+
+  uint leftCount{0};
+  uint rightCount{0};
+
+  for (uint i = 0; i < node.count; i++) {
+    const Triangle& triangle = scene[sceneIndices[node.leftFirst + i]];
+    if (triangle.centroid[axis] < pos) {
+      leftCount++;
+      leftBox.grow(triangle.v0);
+      leftBox.grow(triangle.v1);
+      leftBox.grow(triangle.v2);
+    } else {
+      rightCount++;
+      rightBox.grow(triangle.v0);
+      rightBox.grow(triangle.v1);
+      rightBox.grow(triangle.v2);
+    }
+  }
+
+  // Sum of the products of child box primitive counts and box surface areas
+  float cost = leftCount * leftBox.area() + rightCount * rightBox.area();
+  return cost > 0 ? cost : FLT_MAX;
+}
+
+// Recursively divide BVH node down to child nodes and include them in the tree
 void subdivide(std::vector<BVHNode>& bvh,
                const std::vector<Triangle>& scene,
                std::vector<uint>& sceneIndices,
                uint& nodeIdx,
                uint& nodesUsed) {
-  // Terminate recursion
   BVHNode& node = bvh[nodeIdx];
-  if (node.count <= 2) {
+
+  // Determine best split axis and position using SAH
+  uint bestAxis{0};
+  float splitPos{0};
+  float bestCost = FLT_MAX;
+  for (int axis = 0; axis < 3; axis++) {
+    for (uint i = 0; i < node.count; i++) {
+      float candidatePos = scene[sceneIndices[node.leftFirst + i]].centroid[axis];
+      float cost = evaluateSAH(node, axis, candidatePos, scene, sceneIndices);
+      if (cost < bestCost) {
+        splitPos = candidatePos;
+        bestAxis = axis;
+        bestCost = cost;
+      }
+    }
+  }
+
+  vec3 dim = node.aabbMax - node.aabbMin;
+  float parentArea = 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);
+  float parentCost = node.count * parentArea;
+
+  if (bestCost >= parentCost) {
     return;
   }
-
-  // Determine longest axis
-  vec3 extent = node.aabbMax - node.aabbMin;
-  int axis = 0;
-  if (extent.y > extent.x) {
-    axis = 1;
-  }
-  if (extent.z > extent[axis]) {
-    axis = 2;
-  }
-
-  // Split halfway along the exis
-  float splitPos = node.aabbMin[axis] + extent[axis] * 0.5f;
 
   // Traverse list of indices from front and back
   int i = node.leftFirst;
@@ -77,7 +115,7 @@ void subdivide(std::vector<BVHNode>& bvh,
   // While the elements are not the same
   while (i <= j) {
     // If element is to the left of the partition, skip over it
-    if (scene[sceneIndices[i]].centroid[axis] < splitPos) {
+    if (scene[sceneIndices[i]].centroid[bestAxis] < splitPos) {
       i++;
     } else {
       // Swap the element with the element at the back
@@ -125,7 +163,7 @@ void buildBVH(
   BVHNode& root = bvh[rootNodeIdx];
   root.leftFirst = 0;
   root.count = scene.size();
-  updateNodeBounds(bvh[rootNodeIdx], scene, sceneIndices);
+  updateNodeBounds(root, scene, sceneIndices);
   subdivide(bvh, scene, sceneIndices, rootNodeIdx, nodesUsed);
 }
 
@@ -206,7 +244,7 @@ int main() {
     v = vec3{0};
   }
 
-  vec3 cameraPosition = vec3{-1.4, 0.2, 1.2};
+  vec3 cameraPosition = vec3{-1.0f, 0.2f, 1.0f};
   Camera camera{
       .position = cameraPosition,
       .target = vec3{0},
@@ -263,16 +301,22 @@ int main() {
   uint rootNodeIdx = 0;
   uint nodesUsed = 1;
 
+  // ----- Build BVH ----- //
+
+  auto start{std::chrono::steady_clock::now()};
   buildBVH(bvh, scene, sceneIndices, rootNodeIdx, nodesUsed);
+  std::chrono::duration<double> elapsed_seconds{std::chrono::steady_clock::now() - start};
+  std::cout << "BVH build time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
+  std::cout << "Nodes: " << nodesUsed << std::endl;
 
-  const auto start{std::chrono::steady_clock::now()};
+  // ----- Render scene ----- //
 
+  start = std::chrono::steady_clock::now();
   render(scene, bvh, sceneIndices, camera, resolution, image);
+  elapsed_seconds = std::chrono::steady_clock::now() - start;
+  std::cout << "Render time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
-  const auto end{std::chrono::steady_clock::now()};
-  const std::chrono::duration<double> elapsed_seconds{end - start};
-
-  std::cout << "Time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
+  // ----- Output ----- //
 
   outputToFile(resolution, image);
 
