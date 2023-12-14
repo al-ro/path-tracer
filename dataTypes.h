@@ -31,10 +31,13 @@ struct Triangle {
 };
 
 /* Bounding volume hierarchy node */
-struct BVH {
-  BVH* left = nullptr;
-  BVH* right = nullptr;
-  Triangle* triangle = nullptr;
+struct BVHNode {
+  vec3 aabbMin;
+  vec3 aabbMax;
+  // Index of first primitive or left child
+  uint leftFirst;
+  // Number of primitives
+  uint count;
 };
 
 /* 3D vector with origin, direction and intersection position t */

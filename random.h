@@ -12,10 +12,14 @@ uint pcg_hash(uint& seed) {
   return (word >> 22u) ^ word;
 }
 
-vec2 getRandomXi(uint& state) {
+float getRandom(uint& state) {
+  return pcg_hash(state) * INV_MAX_UINT32;
+}
+
+vec2 getRandomVec2(uint& state) {
   return dvec2(pcg_hash(state), pcg_hash(state)) * INV_MAX_UINT32;
 }
 
-vec3 getRandomPoint(uint& state) {
+vec3 getRandomVec3(uint& state) {
   return dvec3(pcg_hash(state), pcg_hash(state), pcg_hash(state)) * INV_MAX_UINT32;
 }

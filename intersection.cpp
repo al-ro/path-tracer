@@ -29,3 +29,13 @@ float intersect(const Ray& ray, const Triangle& triangle) {
 
   return f * dot(edge2, q);
 }
+
+bool intersect(const Ray& ray, const vec3& bmin, const vec3& bmax) {
+  float tx1 = (bmin.x - ray.origin.x) / ray.direction.x, tx2 = (bmax.x - ray.origin.x) / ray.direction.x;
+  float tmin = min(tx1, tx2), tmax = max(tx1, tx2);
+  float ty1 = (bmin.y - ray.origin.y) / ray.direction.y, ty2 = (bmax.y - ray.origin.y) / ray.direction.y;
+  tmin = max(tmin, min(ty1, ty2)), tmax = min(tmax, max(ty1, ty2));
+  float tz1 = (bmin.z - ray.origin.z) / ray.direction.z, tz2 = (bmax.z - ray.origin.z) / ray.direction.z;
+  tmin = max(tmin, min(tz1, tz2)), tmax = min(tmax, max(tz1, tz2));
+  return tmax >= tmin && tmin < ray.t && tmax > 0;
+}
