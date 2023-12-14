@@ -31,14 +31,6 @@ mat3 viewMatrix(vec3 camera, vec3 at, vec3 up) {
 
 //-------------------------- Construct BVH ---------------------------
 
-vec3 min(const vec3& a, const vec3& b) {
-  return vec3{fminf(a.x, b.x), fminf(a.y, b.y), fminf(a.z, b.z)};
-}
-
-vec3 max(const vec3& a, const vec3& b) {
-  return vec3{fmaxf(a.x, b.x), fmaxf(a.y, b.y), fmaxf(a.z, b.z)};
-}
-
 void updateNodeBounds(BVHNode& node,
                       const std::vector<Triangle>& scene,
                       std::vector<uint>& sceneIndices) {
@@ -103,12 +95,15 @@ void subdivide(std::vector<BVHNode>& bvh,
   // Create child nodes. Left node is followed by right one
   uint leftChildIdx = nodesUsed++;
   uint rightChildIdx = nodesUsed++;
+
   // Left has primitives [0...leftCount) of the parent node
   bvh[leftChildIdx].leftFirst = node.leftFirst;
   bvh[leftChildIdx].count = leftCount;
+
   // Right has primitives [leftCount...count)
   bvh[rightChildIdx].leftFirst = i;
   bvh[rightChildIdx].count = node.count - leftCount;
+
   // Mark parent node as an internal one with reference to left child node
   node.leftFirst = leftChildIdx;
   node.count = 0;
@@ -191,7 +186,7 @@ void render(
     t = intersectBVH(ray, bvh, scene, sceneIndices, 0);
     if (t > 0.0f && t < ray.t) {
       ray.t = t;
-      image[i] = vec3(0.95);
+      image[i] = vec3{t / 4.0f};
     }
   }
 }
@@ -199,8 +194,8 @@ void render(
 int main() {
   uint rngState{4097};
 
-  const uint width{512};
-  const uint height{256};
+  const uint width{1800};
+  const uint height{800};
 
   const vec2 resolution{width, height};
 
@@ -211,30 +206,55 @@ int main() {
     v = vec3{0};
   }
 
-  vec3 cameraPosition = vec3{0, 0, 10};
+  vec3 cameraPosition = vec3{-1.4, 0.2, 1.2};
   Camera camera{
       .position = cameraPosition,
       .target = vec3{0},
       .up = normalize(vec3{0, 1, 0}),
       .fieldOfView = 65.0f};
 
-  std::vector<Triangle> scene(128);
+  std::vector<Triangle> scene(12582);
+
+  FILE* file = fopen("obj/unity.tri", "r");
+  float a, b, c, d, e, f, g, h, i;
+  for (int t = 0; t < 12582; t++) {
+    fscanf(file, "%f %f %f %f %f %f %f %f %f\n",
+           &a, &b, &c, &d, &e, &f, &g, &h, &i);
+    scene[t].v0 = vec3{a, b, c};
+    scene[t].v1 = vec3{d, e, f};
+    scene[t].v2 = vec3{g, h, i};
+  }
+  fclose(file);
+
+  vec3 aabbMin = vec3(FLT_MAX);
+  vec3 aabbMax = vec3(-FLT_MAX);
+
+  for (auto& triangle : scene) {
+    aabbMin = min(aabbMin, triangle.v0);
+    aabbMin = min(aabbMin, triangle.v1);
+    aabbMin = min(aabbMin, triangle.v2);
+    aabbMax = max(aabbMax, triangle.v0);
+    aabbMax = max(aabbMax, triangle.v1);
+    aabbMax = max(aabbMax, triangle.v2);
+  }
+
+  vec3 centre = aabbMin + 0.5f * (aabbMax - aabbMin);
+
+  for (auto& triangle : scene) {
+    triangle.v0 -= centre;
+    triangle.v1 -= centre;
+    triangle.v2 -= centre;
+  }
+
+  for (auto& triangle : scene) {
+    triangle.centroid = (triangle.v0 + triangle.v1 + triangle.v2) / 3.0f;
+  }
+
   std::vector<uint> sceneIndices(scene.size());
 
   // Populate scene indices sequentially [0...N)
   for (uint i = 0u; i < sceneIndices.size(); i++) {
     sceneIndices[i] = i;
-  }
-
-  vec3 p{};
-  for (auto& triangle : scene) {
-    p = 6.0f * (2.0f * getRandomVec3(rngState) - 1.0f);
-
-    triangle.v0 = p + normalize(2.0f * getRandomVec3(rngState) - 1.0f);
-    triangle.v1 = p + normalize(2.0f * getRandomVec3(rngState) - 1.0f);
-    triangle.v2 = p + normalize(2.0f * getRandomVec3(rngState) - 1.0f);
-
-    triangle.centroid = (triangle.v0 + triangle.v1 + triangle.v2) / 3.0f;
   }
 
   // BVH tree with reserved space for 2N-1 nodes which is the maximum number of nodes in a binary tree with N leaves
