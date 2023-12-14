@@ -169,7 +169,7 @@ void buildBVH(
 
 //-------------------------- Traverse BVH ---------------------------
 
-float intersectBVH(
+float IntersectBVH(
     Ray& ray,
     const std::vector<BVHNode>& bvh,
     const std::vector<Triangle>& scene,
@@ -179,7 +179,7 @@ float intersectBVH(
 
   float t = FLT_MAX;
 
-  if (!intersect(ray, node.aabbMin, node.aabbMax)) {
+  if (intersect(ray, node.aabbMin, node.aabbMax) == FLT_MAX) {
     return t;
   }
 
@@ -191,9 +191,61 @@ float intersectBVH(
       }
     }
   } else {
-    float left = intersectBVH(ray, bvh, scene, sceneIndices, node.leftFirst);
-    float right = intersectBVH(ray, bvh, scene, sceneIndices, node.leftFirst + 1);
+    float left = IntersectBVH(ray, bvh, scene, sceneIndices, node.leftFirst);
+    float right = IntersectBVH(ray, bvh, scene, sceneIndices, node.leftFirst + 1);
     t = min(left, right);
+  }
+  return t;
+}
+
+float intersectBVH(
+    Ray& ray,
+    const std::vector<BVHNode>& bvh,
+    const std::vector<Triangle>& scene,
+    const std::vector<uint>& sceneIndices,
+    const uint nodeIdx) {
+  float t = FLT_MAX;
+
+  const BVHNode* node = &bvh[nodeIdx];
+  const BVHNode* stack[64];
+  uint stackPtr = 0;
+
+  while (1) {
+    if (node->count > 0) {
+      for (uint i = 0; i < node->count; i++) {
+        float tt = intersect(ray, scene[sceneIndices[node->leftFirst + i]]);
+        if (tt > 0.0f) {
+          t = min(t, tt);
+        }
+      }
+
+      if (stackPtr == 0) {
+        break;
+      } else {
+        node = stack[--stackPtr];
+      }
+      continue;
+    }
+    const BVHNode* child1 = &bvh[node->leftFirst];
+    const BVHNode* child2 = &bvh[node->leftFirst + 1];
+    float dist1 = intersect(ray, child1->aabbMin, child1->aabbMax);
+    float dist2 = intersect(ray, child2->aabbMin, child2->aabbMax);
+    if (dist1 > dist2) {
+      std::swap(dist1, dist2);
+      std::swap(child1, child2);
+    }
+    if (dist1 == FLT_MAX) {
+      if (stackPtr == 0) {
+        break;
+      } else {
+        node = stack[--stackPtr];
+      }
+    } else {
+      node = child1;
+      if (dist2 != FLT_MAX) {
+        stack[stackPtr++] = child2;
+      }
+    }
   }
   return t;
 }
@@ -210,21 +262,32 @@ void render(
     const Camera& camera,
     const vec2& resolution,
     std::vector<vec3>& image) {
-  Ray ray{camera.position, vec3{}, 0.0f};
+  Ray ray{.origin = camera.position};
   vec2 fragCoord{};
 
-  for (int i = 0; i < image.size(); i++) {
-    fragCoord = {std::fmod(i, resolution.x), std::floor((float)(i) / resolution.x)};
-    ray.direction = rayDirection(resolution, camera.fieldOfView, fragCoord);
-    ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
-    ray.t = FLT_MAX;
+  // for (int i = 0; i < image.size(); i++) {
 
-    image[i] = 0.5f + 0.5f * ray.direction;
-    float t{};
-    t = intersectBVH(ray, bvh, scene, sceneIndices, 0);
-    if (t > 0.0f && t < ray.t) {
-      ray.t = t;
-      image[i] = vec3{t / 4.0f};
+  for (int y = 0; y < resolution.y; y += 4) {
+    for (int x = 0; x < resolution.x; x += 4) {
+      for (int v = 0; v < 4; v++) {
+        for (int u = 0; u < 4; u++) {
+          fragCoord = vec2{x + u, y + v};  //{std::fmod(i, resolution.x), std::floor((float)(i) / resolution.x)};
+          ray.direction = rayDirection(resolution, camera.fieldOfView, fragCoord);
+          ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
+          ray.invDirection = 1.0f / ray.direction;
+          ray.t = FLT_MAX;
+
+          int i = fragCoord.y * resolution.x + fragCoord.x;
+          image[i] = 0.5f + 0.5f * ray.direction;
+
+          float t{};
+          t = intersectBVH(ray, bvh, scene, sceneIndices, 0);
+          if (t > 0.0f && t < ray.t) {
+            ray.t = t;
+            image[i] = vec3{t / 4.0f};
+          }
+        }
+      }
     }
   }
 }
@@ -244,9 +307,8 @@ int main() {
     v = vec3{0};
   }
 
-  vec3 cameraPosition = vec3{-1.0f, 0.2f, 1.0f};
   Camera camera{
-      .position = cameraPosition,
+      .position = vec3{-1.0f, 0.2f, 1.0f},
       .target = vec3{0},
       .up = normalize(vec3{0, 1, 0}),
       .fieldOfView = 65.0f};
@@ -256,8 +318,8 @@ int main() {
   FILE* file = fopen("obj/unity.tri", "r");
   float a, b, c, d, e, f, g, h, i;
   for (int t = 0; t < 12582; t++) {
-    fscanf(file, "%f %f %f %f %f %f %f %f %f\n",
-           &a, &b, &c, &d, &e, &f, &g, &h, &i);
+    int result = fscanf(file, "%f %f %f %f %f %f %f %f %f\n",
+                        &a, &b, &c, &d, &e, &f, &g, &h, &i);
     scene[t].v0 = vec3{a, b, c};
     scene[t].v1 = vec3{d, e, f};
     scene[t].v2 = vec3{g, h, i};

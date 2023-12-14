@@ -2,4 +2,4 @@
 
 float intersect(const Ray& ray, const Triangle& triangle);
 float intersect(const Ray& ray, const AABB& aabb);
-bool intersect(const Ray& ray, const vec3& aabbMin, const vec3& aabbMax);
+float intersect(const Ray& ray, const vec3& aabbMin, const vec3& aabbMax);

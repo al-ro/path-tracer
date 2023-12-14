@@ -56,6 +56,7 @@ struct BVHNode {
 struct Ray {
   vec3 origin{};
   vec3 direction{};
+  vec3 invDirection{};
   // Distance along ray where an intersection occurs
   float t{};
 };
