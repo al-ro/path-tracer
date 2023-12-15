@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <stack>
+#include <thread>
 #include <vector>
 
 #include "brdf.h"
@@ -83,7 +84,7 @@ float findBestSplitPlane(BVHNode& node,
                          std::vector<uint>& sceneIndices,
                          uint& bestAxis, float& splitPos) {
   float bestCost = FLT_MAX;
-  const uint COUNT = 16;
+  const uint COUNT = 64;
 
   for (uint axis = 0u; axis < 3u; axis++) {
     float boundsMin = FLT_MAX;
@@ -315,9 +316,20 @@ vec3 getNormal(const Triangle& triangle) {
   return normalize(cross(triangle.v0 - triangle.v1, triangle.v0 - triangle.v2));
 }
 
+float metalness = 0.0;
+float roughness = 0.01;
+vec3 albedo = vec3(1);
+
+// Index of refraction for common dielectrics. Corresponds to F0 0.04
+float IOR = 1.5;
+
+// Reflectance of the surface when looking straight at it along the negative normal
+vec3 F0 = vec3(pow(IOR - 1.0, 2.0) / pow(IOR + 1.0, 2.0));
+
 vec3 getIllumination(Ray& ray,
                      const std::vector<BVHNode>& bvh,
                      const std::vector<Triangle>& scene,
+                     const std::vector<vec3>& normals,
                      const std::vector<uint>& sceneIndices,
                      const uint nodeIdx,
                      uint& rngState,
@@ -336,22 +348,9 @@ vec3 getIllumination(Ray& ray,
   if (hit) {
     ray.t = t;
     vec3 p = ray.origin + ray.direction * ray.t;
-    vec3 N = getNormal(scene[hitIndex]);
+    vec3 N = normals[hitIndex];
     p += 1e-4f * N;
     vec3 V = -ray.direction;
-
-    float metalness = 0.0;
-    float roughness = 0.15;
-    vec3 albedo = vec3(1);
-
-    // Index of refraction for common dielectrics. Corresponds to F0 0.04
-    float IOR = 1.5;
-
-    // Reflectance of the surface when looking straight at it along the negative normal
-    vec3 F0 = vec3(pow(IOR - 1.0, 2.0) / pow(IOR + 1.0, 2.0));
-
-    vec3 tintColour = vec3(albedo);
-    F0 = mix(F0, tintColour, metalness);
 
     //--------------------- Diffuse ------------------------
 
@@ -366,7 +365,7 @@ vec3 getIllumination(Ray& ray,
         Lambertian BRDF is c/PI and the pdf for cosine sampling is dot(l, n)/PI
         PI term and dot products cancel out leaving just c * L(l)
     */
-    vec3 diffuse = albedo * getIllumination(sampleRay, bvh, scene, sceneIndices, 0, rngState, bounceCount);
+    vec3 diffuse = albedo * getIllumination(sampleRay, bvh, scene, normals, sceneIndices, 0, rngState, bounceCount);
 
     //--------------------- Specular ------------------------
 
@@ -402,52 +401,61 @@ vec3 getIllumination(Ray& ray,
     // Simplified from the above
 
     sampleRay = Ray(p, sampleDir, 1.0f / sampleDir, FLT_MAX);
-    vec3 specular = (getIllumination(sampleRay, bvh, scene, sceneIndices, 0, rngState, bounceCount) * F * G * VdotH) / (NdotV * NdotH);
+    vec3 specular = (getIllumination(sampleRay, bvh, scene, normals, sceneIndices, 0, rngState, bounceCount) * F * G * VdotH) / (NdotV * NdotH);
 
     // Combine diffuse and specular
     vec3 kD = (1.0f - F) * (1.0f - metalness);
-    vec3 irradiance = specular + kD * diffuse;  // (1.0-metalness) * (1.0-fresnel(NdotL, F0))*(1.0-fresnel(NdotV, F0));
-
-    col = irradiance;
+    col = specular + kD * diffuse;  // (1.0-metalness) * (1.0-fresnel(NdotL, F0))*(1.0-fresnel(NdotV, F0));
 
   } else {
     col = getEnvironment(ray.direction);
   }
-  return clamp(col, 0.0f, 1.0f);
+  return col;
+}
+
+void printProgress(double percentage) {
+  printf("\r%3d%%", (int)(percentage * 101));
+  fflush(stdout);
 }
 
 void render(
     const std::vector<Triangle>& scene,
+    const std::vector<vec3>& normals,
     const std::vector<BVHNode>& bvh,
     const std::vector<uint>& sceneIndices,
     const Camera& camera,
     const vec2& resolution,
-    std::vector<vec3>& image) {
+    std::vector<vec3>& image,
+    vec2 threadInfo) {
   Ray ray{.origin = camera.position};
   vec2 fragCoord{};
 
-  const uint samples = 16.0f;
+  const uint samples = 32;
   uint rngState{1031};
 
-  for (uint y = 0u; y < resolution.y; y += 4u) {
-    for (uint x = 0u; x < resolution.x; x += 4u) {
-      for (uint v = 0u; v < 4u; v++) {
-        for (uint u = 0u; u < 4u; u++) {
-          fragCoord = vec2{x + u, y + v};
-          uint idx = fragCoord.y * resolution.x + fragCoord.x;
+  uint tileSize = resolution.y / threadInfo.y;
 
-          for (uint s = 0u; s < samples; s++) {
-            vec2 fC = fragCoord + 0.5f * (2.0f * getRandomVec2(rngState) - 1.0f);
-            ray.direction = rayDirection(resolution, camera.fieldOfView, fC);
-            ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
-            ray.invDirection = 1.0f / ray.direction;
-            ray.t = FLT_MAX;
+  uint startRow = threadInfo.x * tileSize;
+  uint endRow = startRow + tileSize;
 
-            image[idx] += getIllumination(ray, bvh, scene, sceneIndices, 0, rngState, 10);
-          }
-          image[idx] /= samples;
-        }
+  for (uint y = startRow; y < endRow; y++) {
+    if (threadInfo.x == 0) {
+      printProgress(y / float(endRow));
+    }
+    for (uint x = 0u; x < resolution.x; x++) {
+      fragCoord = vec2{x, y};
+      uint idx = fragCoord.y * resolution.x + fragCoord.x;
+
+      for (uint s = 0u; s < samples; s++) {
+        vec2 fC = fragCoord + 0.5f * (2.0f * getRandomVec2(rngState) - 1.0f);
+        ray.direction = rayDirection(resolution, camera.fieldOfView, fC);
+        ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
+        ray.invDirection = 1.0f / ray.direction;
+        ray.t = FLT_MAX;
+
+        image[idx] += getIllumination(ray, bvh, scene, normals, sceneIndices, 0, rngState, 10);
       }
+      image[idx] /= samples;
     }
   }
 }
@@ -455,8 +463,8 @@ void render(
 int main() {
   uint rngState{4097};
 
-  const uint width{1500};
-  const uint height{800};
+  const uint width{750};
+  const uint height{400};
 
   const vec2 resolution{width, height};
 
@@ -488,10 +496,12 @@ int main() {
 
   stl_reader::StlMesh<float, uint> mesh("obj/bust-of-menelaus.stl");
   std::vector<Triangle> scene2{mesh.num_tris()};
+  std::vector<vec3> normals{scene2.size()};
   for (uint i = 0; i < scene2.size(); i++) {
     scene2[i].v0 = rotateX(vec3{mesh.tri_corner_coords(i, 0)[0], mesh.tri_corner_coords(i, 0)[1], mesh.tri_corner_coords(i, 0)[2]}, -0.5f * 3.1415926f);
     scene2[i].v1 = rotateX(vec3{mesh.tri_corner_coords(i, 1)[0], mesh.tri_corner_coords(i, 1)[1], mesh.tri_corner_coords(i, 1)[2]}, -0.5f * 3.1415926f);
     scene2[i].v2 = rotateX(vec3{mesh.tri_corner_coords(i, 2)[0], mesh.tri_corner_coords(i, 2)[1], mesh.tri_corner_coords(i, 2)[2]}, -0.5f * 3.1415926f);
+    normals[i] = getNormal(scene2[i]);
   }
 
   vec3 aabbMin = vec3(FLT_MAX);
@@ -544,9 +554,17 @@ int main() {
   // ----- Render scene ----- //
 
   start = std::chrono::steady_clock::now();
-  render(scene2, bvh, sceneIndices, camera, resolution, image);
+
+  uint numThreads{3};
+  std::thread t0(render, std::ref(scene2), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{0, numThreads});
+  std::thread t1(render, std::ref(scene2), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{1, numThreads});
+  std::thread t2(render, std::ref(scene2), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{2, numThreads});
+  t0.join();
+  t1.join();
+  t2.join();
+
   elapsed_seconds = std::chrono::steady_clock::now() - start;
-  std::cout << "Render time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
+  std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
   // ----- Output ----- //
 
