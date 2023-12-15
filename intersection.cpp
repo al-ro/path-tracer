@@ -9,7 +9,7 @@ float intersect(const Ray& ray, const Triangle& triangle) {
 
   if (a > -1e-4f && a < 1e-4f) {
     // Ray parallel to triangle
-    return -1.0f;
+    return FLT_MAX;
   }
 
   const float f = 1.0f / a;
@@ -17,17 +17,18 @@ float intersect(const Ray& ray, const Triangle& triangle) {
   const float u = f * dot(s, h);
 
   if (u < 0.0f || u > 1.0f) {
-    return -1.0f;
+    return FLT_MAX;
   }
 
   const vec3 q = cross(s, edge1);
   const float v = f * dot(ray.direction, q);
 
   if (v < 0.0f || u + v > 1.0f) {
-    return -1.0f;
+    return FLT_MAX;
   }
 
-  return f * dot(edge2, q);
+  float t = f * dot(edge2, q);
+  return t > 0.0f ? t : FLT_MAX;
 }
 
 float intersect(const Ray& ray, const vec3& bmin, const vec3& bmax) {

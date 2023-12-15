@@ -1,9 +1,11 @@
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
+#include <stack>
 #include <vector>
 
 #include "intersection.h"
+#include "lib/stl_reader.h"
 #include "output.h"
 #include "random.h"
 
@@ -185,10 +187,7 @@ float IntersectBVH(
 
   if (node.count > 0) {
     for (uint i = 0; i < node.count; i++) {
-      float tt = intersect(ray, scene[sceneIndices[node.leftFirst + i]]);
-      if (tt > 0.0f) {
-        t = min(t, tt);
-      }
+      t = min(t, intersect(ray, scene[sceneIndices[node.leftFirst + i]]));
     }
   } else {
     float left = IntersectBVH(ray, bvh, scene, sceneIndices, node.leftFirst);
@@ -207,43 +206,54 @@ float intersectBVH(
   float t = FLT_MAX;
 
   const BVHNode* node = &bvh[nodeIdx];
-  const BVHNode* stack[64];
-  uint stackPtr = 0;
+  std::stack<const BVHNode*> stack;
 
   while (1) {
+    // If leaf node, intersect with primitives
     if (node->count > 0) {
       for (uint i = 0; i < node->count; i++) {
-        float tt = intersect(ray, scene[sceneIndices[node->leftFirst + i]]);
-        if (tt > 0.0f) {
-          t = min(t, tt);
-        }
+        t = min(t, intersect(ray, scene[sceneIndices[node->leftFirst + i]]));
       }
 
-      if (stackPtr == 0) {
+      // If stack is empty, exit loop. Else grab next element on stack
+      if (stack.empty()) {
         break;
       } else {
-        node = stack[--stackPtr];
+        node = stack.top();
+        stack.pop();
       }
+      // Skip to the start of the loop
       continue;
     }
+
+    // Compare the distances to the two child nodes
     const BVHNode* child1 = &bvh[node->leftFirst];
     const BVHNode* child2 = &bvh[node->leftFirst + 1];
     float dist1 = intersect(ray, child1->aabbMin, child1->aabbMax);
     float dist2 = intersect(ray, child2->aabbMin, child2->aabbMax);
+
+    // Consider closer one first
     if (dist1 > dist2) {
       std::swap(dist1, dist2);
       std::swap(child1, child2);
     }
+
+    // If closer node is missed, the farther one is as well
     if (dist1 == FLT_MAX) {
-      if (stackPtr == 0) {
+      // Exit if stack empty or grab next element
+      if (stack.empty()) {
         break;
       } else {
-        node = stack[--stackPtr];
+        node = stack.top();
+        stack.pop();
       }
     } else {
+      // If closer node is hit, consider it for the next loop.
       node = child1;
+
+      // If the farther node is not missed, place it on the stack
       if (dist2 != FLT_MAX) {
-        stack[stackPtr++] = child2;
+        stack.push(child2);
       }
     }
   }
@@ -325,7 +335,15 @@ int main() {
     scene[t].v2 = vec3{g, h, i};
   }
   fclose(file);
-
+  /*
+    stl_reader::StlMesh<float, unsigned int> mesh("obj/bust-of-menelaus.stl");
+    std::vector<Triangle> scene2{50000};
+    for (uint i = 0; i < scene2.size(); i++) {
+      scene2[i].v0 = rotateX(vec3{mesh.tri_corner_coords(i, 0)[0], mesh.tri_corner_coords(i, 0)[1], mesh.tri_corner_coords(i, 0)[2]}, -0.5f * 3.1415926f);
+      scene2[i].v1 = rotateX(vec3{mesh.tri_corner_coords(i, 1)[0], mesh.tri_corner_coords(i, 1)[1], mesh.tri_corner_coords(i, 1)[2]}, -0.5f * 3.1415926f);
+      scene2[i].v2 = rotateX(vec3{mesh.tri_corner_coords(i, 2)[0], mesh.tri_corner_coords(i, 2)[1], mesh.tri_corner_coords(i, 2)[2]}, -0.5f * 3.1415926f);
+    }
+  */
   vec3 aabbMin = vec3(FLT_MAX);
   vec3 aabbMax = vec3(-FLT_MAX);
 
