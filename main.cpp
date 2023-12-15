@@ -332,11 +332,12 @@ vec3 getIllumination(Ray& ray,
 
   float t = intersectBVH(ray, bvh, scene, sceneIndices, nodeIdx, hitIndex);
   hit = t > 0.0f && t < ray.t;
-  ray.t = t;
 
   if (hit) {
-    vec3 p = ray.origin;  // + ray.direction * ray.t;
+    ray.t = t;
+    vec3 p = ray.origin + ray.direction * ray.t;
     vec3 N = getNormal(scene[hitIndex]);
+    p += 1e-4f * N;
     vec3 V = -ray.direction;
 
     float metalness = 0.0;
