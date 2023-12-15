@@ -27,6 +27,12 @@ struct AABB {
     min = glm::min(min, p);
     max = glm::max(max, p);
   }
+
+  // Increase AABB dimensions by including new AABB b
+  void grow(AABB b) {
+    min = glm::min(min, b.min);
+    max = glm::max(max, b.max);
+  }
   // Return surface are 2xy * 2xz * 2yz
   float area() {
     vec3 dim = max - min;
@@ -50,6 +56,12 @@ struct BVHNode {
   uint leftFirst;
   // Number of primitives
   uint count;
+};
+
+// The extent of the primitives in a BVH construction interval and the number of primitives in it
+struct Bin {
+  AABB bounds{};
+  uint count{};
 };
 
 /* 3D vector with origin, direction and intersection position t */

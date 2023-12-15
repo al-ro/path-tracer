@@ -4,6 +4,7 @@ Basic C++ path tracer with bounding volume hierarchy (BVH) following https://jac
 
 
 ![Output](output.bmp)
+["Bust of Menelaus" by Scan The World](https://www.myminifactory.com/object/3d-print-bust-of-menelaus-32197)
 
 ## Features
 

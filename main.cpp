@@ -50,7 +50,7 @@ void updateNodeBounds(BVHNode& node,
 }
 
 // Determine triangle counts and bounds for given split candidate
-float evaluateSAH(BVHNode& node, int axis, float pos,
+float evaluateSAH(BVHNode& node, uint axis, float pos,
                   const std::vector<Triangle>& scene,
                   std::vector<uint>& sceneIndices) {
   AABB leftBox{};
@@ -79,6 +79,85 @@ float evaluateSAH(BVHNode& node, int axis, float pos,
   return cost > 0 ? cost : FLT_MAX;
 }
 
+// Determine best split axis and position using SAH
+float findBestSplitPlane(BVHNode& node,
+                         const std::vector<Triangle>& scene,
+                         std::vector<uint>& sceneIndices,
+                         uint& bestAxis, float& splitPos) {
+  float bestCost = FLT_MAX;
+  const uint COUNT = 16;
+
+  for (uint axis = 0u; axis < 3u; axis++) {
+    float boundsMin = FLT_MAX;
+    float boundsMax = -FLT_MAX;
+
+    // Split the space bounded by primitive centroids
+    for (uint i = 0u; i < node.count; i++) {
+      const Triangle& triangle = scene[sceneIndices[node.leftFirst + i]];
+      boundsMin = min(boundsMin, triangle.centroid[axis]);
+      boundsMax = max(boundsMax, triangle.centroid[axis]);
+    }
+
+    if (boundsMin == boundsMax) {
+      // Flat in given dimension
+      continue;
+    }
+
+    std::vector<Bin> bins{COUNT};
+    float binSize = COUNT / (boundsMax - boundsMin);
+
+    for (uint i = 0; i < node.count; i++) {
+      const Triangle& triangle = scene[sceneIndices[node.leftFirst + i]];
+      uint binIdx = min((float)COUNT - 1.0f, floor((triangle.centroid[axis] - boundsMin) * binSize));
+      bins[binIdx].count++;
+      bins[binIdx].bounds.grow(triangle.v0);
+      bins[binIdx].bounds.grow(triangle.v1);
+      bins[binIdx].bounds.grow(triangle.v2);
+    }
+
+    std::vector<float> leftArea(COUNT - 1u);
+    std::vector<uint> leftCount(COUNT - 1u);
+
+    std::vector<float> rightArea(COUNT - 1u);
+    std::vector<uint> rightCount(COUNT - 1u);
+
+    AABB leftBox;
+    uint leftSum{0};
+
+    AABB rightBox;
+    uint rightSum{0};
+
+    for (int i = 0; i < COUNT - 1; i++) {
+      leftSum += bins[i].count;
+      leftCount[i] = leftSum;
+      leftBox.grow(bins[i].bounds);
+      leftArea[i] = leftBox.area();
+
+      rightSum += bins[COUNT - 1 - i].count;
+      rightCount[COUNT - 2 - i] = rightSum;
+      rightBox.grow(bins[COUNT - 1 - i].bounds);
+      rightArea[COUNT - 2 - i] = rightBox.area();
+    }
+
+    float slabSize = (boundsMax - boundsMin) / COUNT;
+    for (uint i = 0; i < COUNT - 1; i++) {
+      float planeCost = 2.0f * leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
+      if (planeCost < bestCost) {
+        splitPos = boundsMin + slabSize * (i + 1u);
+        bestAxis = axis;
+        bestCost = planeCost;
+      }
+    }
+  }
+  return bestCost;
+}
+
+float getNodeCost(const BVHNode& node) {
+  vec3 dim = node.aabbMax - node.aabbMin;
+  float area = 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);
+  return node.count * area;
+}
+
 // Recursively divide BVH node down to child nodes and include them in the tree
 void subdivide(std::vector<BVHNode>& bvh,
                const std::vector<Triangle>& scene,
@@ -90,30 +169,15 @@ void subdivide(std::vector<BVHNode>& bvh,
   // Determine best split axis and position using SAH
   uint bestAxis{0};
   float splitPos{0};
-  float bestCost = FLT_MAX;
-  for (int axis = 0; axis < 3; axis++) {
-    for (uint i = 0; i < node.count; i++) {
-      float candidatePos = scene[sceneIndices[node.leftFirst + i]].centroid[axis];
-      float cost = evaluateSAH(node, axis, candidatePos, scene, sceneIndices);
-      if (cost < bestCost) {
-        splitPos = candidatePos;
-        bestAxis = axis;
-        bestCost = cost;
-      }
-    }
-  }
+  float bestSplitCost = findBestSplitPlane(node, scene, sceneIndices, bestAxis, splitPos);
 
-  vec3 dim = node.aabbMax - node.aabbMin;
-  float parentArea = 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);
-  float parentCost = node.count * parentArea;
-
-  if (bestCost >= parentCost) {
+  if (bestSplitCost >= getNodeCost(node)) {
     return;
   }
 
   // Traverse list of indices from front and back
-  int i = node.leftFirst;
-  int j = i + node.count - 1;
+  uint i = node.leftFirst;
+  uint j = i + node.count - 1;
   // While the elements are not the same
   while (i <= j) {
     // If element is to the left of the partition, skip over it
@@ -127,7 +191,7 @@ void subdivide(std::vector<BVHNode>& bvh,
   }
 
   // Abort split if one of the sides is empty
-  int leftCount = i - node.leftFirst;
+  uint leftCount = i - node.leftFirst;
   if (leftCount == 0 || leftCount == node.count) {
     return;
   }
@@ -249,26 +313,26 @@ void render(
   Ray ray{.origin = camera.position};
   vec2 fragCoord{};
 
-  // for (int i = 0; i < image.size(); i++) {
+  // for (uint i = 0u; i < image.size(); i++) {
 
-  for (int y = 0; y < resolution.y; y += 4) {
-    for (int x = 0; x < resolution.x; x += 4) {
-      for (int v = 0; v < 4; v++) {
-        for (int u = 0; u < 4; u++) {
+  for (uint y = 0u; y < resolution.y; y += 4u) {
+    for (uint x = 0u; x < resolution.x; x += 4u) {
+      for (uint v = 0u; v < 4u; v++) {
+        for (uint u = 0u; u < 4u; u++) {
           fragCoord = vec2{x + u, y + v};  //{std::fmod(i, resolution.x), std::floor((float)(i) / resolution.x)};
           ray.direction = rayDirection(resolution, camera.fieldOfView, fragCoord);
           ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
           ray.invDirection = 1.0f / ray.direction;
           ray.t = FLT_MAX;
 
-          int i = fragCoord.y * resolution.x + fragCoord.x;
+          uint i = fragCoord.y * resolution.x + fragCoord.x;
           image[i] = 0.5f + 0.5f * ray.direction;
 
           float t{};
           t = intersectBVH(ray, bvh, scene, sceneIndices, 0);
           if (t > 0.0f && t < ray.t) {
             ray.t = t;
-            image[i] = vec3{t / 4.0f};
+            image[i] = vec3{t / 180.0f};
           }
         }
       }
@@ -279,7 +343,7 @@ void render(
 int main() {
   uint rngState{4097};
 
-  const uint width{1800};
+  const uint width{1600};
   const uint height{800};
 
   const vec2 resolution{width, height};
@@ -292,7 +356,7 @@ int main() {
   }
 
   Camera camera{
-      .position = vec3{-1.0f, 0.2f, 1.0f},
+      .position = 60.0f * vec3{-1.0f, 0.2f, 1.0f},
       .target = vec3{0},
       .up = normalize(vec3{0, 1, 0}),
       .fieldOfView = 65.0f};
@@ -301,7 +365,7 @@ int main() {
 
   FILE* file = fopen("obj/unity.tri", "r");
   float a, b, c, d, e, f, g, h, i;
-  for (int t = 0; t < 12582; t++) {
+  for (uint t = 0u; t < 12582u; t++) {
     int result = fscanf(file, "%f %f %f %f %f %f %f %f %f\n",
                         &a, &b, &c, &d, &e, &f, &g, &h, &i);
     scene[t].v0 = vec3{a, b, c};
@@ -309,19 +373,19 @@ int main() {
     scene[t].v2 = vec3{g, h, i};
   }
   fclose(file);
-  /*
-    stl_reader::StlMesh<float, unsigned int> mesh("obj/bust-of-menelaus.stl");
-    std::vector<Triangle> scene2{50000};
-    for (uint i = 0; i < scene2.size(); i++) {
-      scene2[i].v0 = rotateX(vec3{mesh.tri_corner_coords(i, 0)[0], mesh.tri_corner_coords(i, 0)[1], mesh.tri_corner_coords(i, 0)[2]}, -0.5f * 3.1415926f);
-      scene2[i].v1 = rotateX(vec3{mesh.tri_corner_coords(i, 1)[0], mesh.tri_corner_coords(i, 1)[1], mesh.tri_corner_coords(i, 1)[2]}, -0.5f * 3.1415926f);
-      scene2[i].v2 = rotateX(vec3{mesh.tri_corner_coords(i, 2)[0], mesh.tri_corner_coords(i, 2)[1], mesh.tri_corner_coords(i, 2)[2]}, -0.5f * 3.1415926f);
-    }
-  */
+
+  stl_reader::StlMesh<float, uint> mesh("obj/bust-of-menelaus.stl");
+  std::vector<Triangle> scene2{mesh.num_tris()};
+  for (uint i = 0; i < scene2.size(); i++) {
+    scene2[i].v0 = rotateX(vec3{mesh.tri_corner_coords(i, 0)[0], mesh.tri_corner_coords(i, 0)[1], mesh.tri_corner_coords(i, 0)[2]}, -0.5f * 3.1415926f);
+    scene2[i].v1 = rotateX(vec3{mesh.tri_corner_coords(i, 1)[0], mesh.tri_corner_coords(i, 1)[1], mesh.tri_corner_coords(i, 1)[2]}, -0.5f * 3.1415926f);
+    scene2[i].v2 = rotateX(vec3{mesh.tri_corner_coords(i, 2)[0], mesh.tri_corner_coords(i, 2)[1], mesh.tri_corner_coords(i, 2)[2]}, -0.5f * 3.1415926f);
+  }
+
   vec3 aabbMin = vec3(FLT_MAX);
   vec3 aabbMax = vec3(-FLT_MAX);
 
-  for (auto& triangle : scene) {
+  for (auto& triangle : scene2) {
     aabbMin = min(aabbMin, triangle.v0);
     aabbMin = min(aabbMin, triangle.v1);
     aabbMin = min(aabbMin, triangle.v2);
@@ -332,17 +396,17 @@ int main() {
 
   vec3 centre = aabbMin + 0.5f * (aabbMax - aabbMin);
 
-  for (auto& triangle : scene) {
+  for (auto& triangle : scene2) {
     triangle.v0 -= centre;
     triangle.v1 -= centre;
     triangle.v2 -= centre;
   }
 
-  for (auto& triangle : scene) {
+  for (auto& triangle : scene2) {
     triangle.centroid = (triangle.v0 + triangle.v1 + triangle.v2) / 3.0f;
   }
 
-  std::vector<uint> sceneIndices(scene.size());
+  std::vector<uint> sceneIndices(scene2.size());
 
   // Populate scene indices sequentially [0...N)
   for (uint i = 0u; i < sceneIndices.size(); i++) {
@@ -350,7 +414,7 @@ int main() {
   }
 
   // BVH tree with reserved space for 2N-1 nodes which is the maximum number of nodes in a binary tree with N leaves
-  std::vector<BVHNode> bvh{2 * scene.size() - 1};
+  std::vector<BVHNode> bvh{2 * scene2.size() - 1};
 
   uint rootNodeIdx = 0;
   uint nodesUsed = 1;
@@ -358,7 +422,7 @@ int main() {
   // ----- Build BVH ----- //
 
   auto start{std::chrono::steady_clock::now()};
-  buildBVH(bvh, scene, sceneIndices, rootNodeIdx, nodesUsed);
+  buildBVH(bvh, scene2, sceneIndices, rootNodeIdx, nodesUsed);
   std::chrono::duration<double> elapsed_seconds{std::chrono::steady_clock::now() - start};
   std::cout << "BVH build time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
   std::cout << "Nodes: " << nodesUsed << std::endl;
@@ -366,7 +430,7 @@ int main() {
   // ----- Render scene ----- //
 
   start = std::chrono::steady_clock::now();
-  render(scene, bvh, sceneIndices, camera, resolution, image);
+  render(scene2, bvh, sceneIndices, camera, resolution, image);
   elapsed_seconds = std::chrono::steady_clock::now() - start;
   std::cout << "Render time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
