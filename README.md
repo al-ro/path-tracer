@@ -1,5 +1,7 @@
 # Path Tracer
 
+This work is in progress.
+
 Basic C++ path tracer with bounding volume hierarchy (BVH) following https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
 
 
@@ -9,7 +11,7 @@ Basic C++ path tracer with bounding volume hierarchy (BVH) following https://jac
 ## Features
 
 - BVH construction and tracing
-- Diffuse Lambertian lighting
+- Diffuse Lambertian lighting (TODO)
 
 ## Dependencies
 
