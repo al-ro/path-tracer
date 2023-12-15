@@ -4,15 +4,13 @@
 #include <stack>
 #include <vector>
 
+#include "brdf.h"
 #include "intersection.h"
 #include "lib/stl_reader.h"
 #include "output.h"
 #include "random.h"
 
 using namespace glm;
-
-void traverseBVH(const BVHNode* bvh) {
-}
 
 //-------------------------- Rays ---------------------------
 
@@ -240,7 +238,8 @@ float intersectBVH(
     const std::vector<BVHNode>& bvh,
     const std::vector<Triangle>& scene,
     const std::vector<uint>& sceneIndices,
-    const uint nodeIdx) {
+    const uint nodeIdx,
+    uint& hitIndex) {
   float t = FLT_MAX;
 
   const BVHNode* node = &bvh[nodeIdx];
@@ -250,7 +249,11 @@ float intersectBVH(
     // If leaf node, intersect with primitives
     if (node->count > 0) {
       for (uint i = 0; i < node->count; i++) {
-        t = min(t, intersect(ray, scene[sceneIndices[node->leftFirst + i]]));
+        float distance = intersect(ray, scene[sceneIndices[node->leftFirst + i]]);
+        if (distance > 0.0f && distance < t) {
+          t = distance;
+          hitIndex = sceneIndices[node->leftFirst + i];
+        }
       }
 
       // If stack is empty, exit loop. Else grab next element on stack
@@ -300,7 +303,116 @@ float intersectBVH(
 
 //-------------------------- Render ---------------------------
 
-void renderTile(const std::vector<vec3>& image, const Extent& extent) {
+float dot_c(const vec3& a, const vec3& b) {
+  return max(dot(a, b), 1e-5f);
+}
+
+vec3 getEnvironment(const vec3& direction) {
+  return vec3{0.5f + 0.5f * direction.y};
+}
+
+vec3 getNormal(const Triangle& triangle) {
+  return normalize(cross(triangle.v0 - triangle.v1, triangle.v0 - triangle.v2));
+}
+
+vec3 getIllumination(Ray& ray,
+                     const std::vector<BVHNode>& bvh,
+                     const std::vector<Triangle>& scene,
+                     const std::vector<uint>& sceneIndices,
+                     const uint nodeIdx,
+                     uint& rngState,
+                     int bounceCount) {
+  if (--bounceCount < 0) {
+    return vec3{0};
+  }
+
+  bool hit = true;
+  vec3 col{0};
+  uint hitIndex{};
+
+  float t = intersectBVH(ray, bvh, scene, sceneIndices, nodeIdx, hitIndex);
+  hit = t > 0.0f && t < ray.t;
+  ray.t = t;
+
+  if (hit) {
+    vec3 p = ray.origin;  // + ray.direction * ray.t;
+    vec3 N = getNormal(scene[hitIndex]);
+    vec3 V = -ray.direction;
+
+    float metalness = 0.0;
+    float roughness = 0.15;
+    vec3 albedo = vec3(1);
+
+    // Index of refraction for common dielectrics. Corresponds to F0 0.04
+    float IOR = 1.5;
+
+    // Reflectance of the surface when looking straight at it along the negative normal
+    vec3 F0 = vec3(pow(IOR - 1.0, 2.0) / pow(IOR + 1.0, 2.0));
+
+    vec3 tintColour = vec3(albedo);
+    F0 = mix(F0, tintColour, metalness);
+
+    //--------------------- Diffuse ------------------------
+
+    vec2 Xi = getRandomVec2(rngState);
+
+    vec3 sampleDir = importanceSampleCosine(Xi, N);
+    Ray sampleRay{p, sampleDir, 1.0f / sampleDir, FLT_MAX};
+
+    /*
+        The discrete Riemann sum for the lighting equation is
+        1/N * Σ(brdf(l, v) * L(l) * dot(l, n)) / pdf(l))
+        Lambertian BRDF is c/PI and the pdf for cosine sampling is dot(l, n)/PI
+        PI term and dot products cancel out leaving just c * L(l)
+    */
+    vec3 diffuse = albedo * getIllumination(sampleRay, bvh, scene, sceneIndices, 0, rngState, bounceCount);
+
+    //--------------------- Specular ------------------------
+
+    Xi = getRandomVec2(rngState);
+    // Get a random halfway vector around the surface normal (in world space)
+    vec3 H = importanceSampleGGX(Xi, N, roughness);
+
+    // Generate sample direction as view ray reflected around h (note sign)
+    sampleDir = normalize(reflect(-V, H));
+
+    float NdotL = dot_c(N, sampleDir);
+    float NdotV = dot_c(N, V);
+    float NdotH = dot_c(N, H);
+    float VdotH = dot_c(V, H);
+
+    vec3 F = fresnel(VdotH, F0);
+    float G = smiths(NdotV, NdotL, roughness);
+
+    /*
+
+        The following can be simplified as the D term and many dot products cancel out
+
+        float D = distribution(NdotH, roughness);
+
+        // Cook-Torrance BRDF
+        vec3 brdfS = D * F * G / max(0.0001, (4.0 * NdotV * NdotL));
+
+        float pdfSpecular = (D * NdotH) / (4.0 * VdotH);
+        vec3 specular = (getEnvironment(sampleDir) * brdfS * NdotL) / pdfSpecular;
+
+    */
+
+    // Simplified from the above
+
+    sampleRay = Ray(p, sampleDir, 1.0f / sampleDir, FLT_MAX);
+    vec3 specular = (getIllumination(sampleRay, bvh, scene, sceneIndices, 0, rngState, bounceCount) * F * G * VdotH) / (NdotV * NdotH);
+
+    // Combine diffuse and specular
+    vec3 kD = (1.0f - F) * (1.0f - metalness);
+    vec3 irradiance = specular + kD * diffuse;  // (1.0-metalness) * (1.0-fresnel(NdotL, F0))*(1.0-fresnel(NdotV, F0));
+
+    col = irradiance;
+
+  } else {
+    col = getEnvironment(ray.direction);
+  }
+  return clamp(col, 0.0f, 1.0f);
 }
 
 void render(
@@ -313,27 +425,26 @@ void render(
   Ray ray{.origin = camera.position};
   vec2 fragCoord{};
 
-  // for (uint i = 0u; i < image.size(); i++) {
+  const uint samples = 16.0f;
+  uint rngState{1031};
 
   for (uint y = 0u; y < resolution.y; y += 4u) {
     for (uint x = 0u; x < resolution.x; x += 4u) {
       for (uint v = 0u; v < 4u; v++) {
         for (uint u = 0u; u < 4u; u++) {
-          fragCoord = vec2{x + u, y + v};  //{std::fmod(i, resolution.x), std::floor((float)(i) / resolution.x)};
-          ray.direction = rayDirection(resolution, camera.fieldOfView, fragCoord);
-          ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
-          ray.invDirection = 1.0f / ray.direction;
-          ray.t = FLT_MAX;
+          fragCoord = vec2{x + u, y + v};
+          uint idx = fragCoord.y * resolution.x + fragCoord.x;
 
-          uint i = fragCoord.y * resolution.x + fragCoord.x;
-          image[i] = 0.5f + 0.5f * ray.direction;
+          for (uint s = 0u; s < samples; s++) {
+            vec2 fC = fragCoord + 0.5f * (2.0f * getRandomVec2(rngState) - 1.0f);
+            ray.direction = rayDirection(resolution, camera.fieldOfView, fC);
+            ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
+            ray.invDirection = 1.0f / ray.direction;
+            ray.t = FLT_MAX;
 
-          float t{};
-          t = intersectBVH(ray, bvh, scene, sceneIndices, 0);
-          if (t > 0.0f && t < ray.t) {
-            ray.t = t;
-            image[i] = vec3{t / 180.0f};
+            image[idx] += getIllumination(ray, bvh, scene, sceneIndices, 0, rngState, 10);
           }
+          image[idx] /= samples;
         }
       }
     }
@@ -343,7 +454,7 @@ void render(
 int main() {
   uint rngState{4097};
 
-  const uint width{1600};
+  const uint width{1500};
   const uint height{800};
 
   const vec2 resolution{width, height};
@@ -356,10 +467,10 @@ int main() {
   }
 
   Camera camera{
-      .position = 60.0f * vec3{-1.0f, 0.2f, 1.0f},
+      .position = 140.0f * vec3{-1.0f, 0.3f, 0.8f},
       .target = vec3{0},
       .up = normalize(vec3{0, 1, 0}),
-      .fieldOfView = 65.0f};
+      .fieldOfView = 45.0f};
 
   std::vector<Triangle> scene(12582);
 
@@ -425,6 +536,8 @@ int main() {
   buildBVH(bvh, scene2, sceneIndices, rootNodeIdx, nodesUsed);
   std::chrono::duration<double> elapsed_seconds{std::chrono::steady_clock::now() - start};
   std::cout << "BVH build time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
+
+  std::cout << "Triangles: " << scene2.size() << std::endl;
   std::cout << "Nodes: " << nodesUsed << std::endl;
 
   // ----- Render scene ----- //

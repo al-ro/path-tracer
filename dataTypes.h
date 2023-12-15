@@ -70,7 +70,7 @@ struct Ray {
   vec3 direction{};
   vec3 invDirection{};
   // Distance along ray where an intersection occurs
-  float t{};
+  float t{FLT_MAX};
 };
 
 struct Camera {

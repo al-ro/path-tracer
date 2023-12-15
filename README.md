@@ -5,7 +5,7 @@ This work is in progress.
 Basic C++ path tracer with bounding volume hierarchy (BVH) following https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
 
 
-![Output](output.bmp)
+![Screenshot](screenshot.bmp)
 ["Bust of Menelaus" by Scan The World](https://www.myminifactory.com/object/3d-print-bust-of-menelaus-32197)
 
 ## Features
