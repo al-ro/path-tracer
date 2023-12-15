@@ -171,32 +171,6 @@ void buildBVH(
 
 //-------------------------- Traverse BVH ---------------------------
 
-float IntersectBVH(
-    Ray& ray,
-    const std::vector<BVHNode>& bvh,
-    const std::vector<Triangle>& scene,
-    const std::vector<uint>& sceneIndices,
-    const uint nodeIdx) {
-  const BVHNode& node = bvh[nodeIdx];
-
-  float t = FLT_MAX;
-
-  if (intersect(ray, node.aabbMin, node.aabbMax) == FLT_MAX) {
-    return t;
-  }
-
-  if (node.count > 0) {
-    for (uint i = 0; i < node.count; i++) {
-      t = min(t, intersect(ray, scene[sceneIndices[node.leftFirst + i]]));
-    }
-  } else {
-    float left = IntersectBVH(ray, bvh, scene, sceneIndices, node.leftFirst);
-    float right = IntersectBVH(ray, bvh, scene, sceneIndices, node.leftFirst + 1);
-    t = min(left, right);
-  }
-  return t;
-}
-
 float intersectBVH(
     Ray& ray,
     const std::vector<BVHNode>& bvh,
@@ -248,10 +222,10 @@ float intersectBVH(
         stack.pop();
       }
     } else {
-      // If closer node is hit, consider it for the next loop.
+      // If closer node is hit, consider it for the next loop
       node = child1;
 
-      // If the farther node is not missed, place it on the stack
+      // If the farther node is hit, place it on the stack
       if (dist2 != FLT_MAX) {
         stack.push(child2);
       }

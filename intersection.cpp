@@ -31,6 +31,7 @@ float intersect(const Ray& ray, const Triangle& triangle) {
   return t > 0.0f ? t : FLT_MAX;
 }
 
+// Slab method without division
 float intersect(const Ray& ray, const vec3& bmin, const vec3& bmax) {
   float tx1 = (bmin.x - ray.origin.x) * ray.invDirection.x;
   float tx2 = (bmax.x - ray.origin.x) * ray.invDirection.x;
