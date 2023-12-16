@@ -328,7 +328,7 @@ vec3 getNormal(const Triangle& triangle) {
 
 float metalness = 0.0;
 float roughness = 0.01;
-vec3 albedo = vec3(1.0);
+vec3 albedo = vec3(1);
 
 // Index of refraction for common dielectrics. Corresponds to F0 0.04
 float IOR = 1.5;
@@ -423,12 +423,7 @@ vec3 getIllumination(Ray& ray,
   return col;
 }
 
-void printProgress(double percentage) {
-  printf("\r%3d%%", (int)(percentage * 101));
-  fflush(stdout);
-}
-
-std::atomic<uint> atomic_idx{0u};
+std::atomic<uint> atomicIdx{0u};
 
 void render(
     const std::vector<Triangle>& scene,
@@ -436,7 +431,6 @@ void render(
     const std::vector<BVHNode>& bvh,
     const std::vector<uint>& sceneIndices,
     const Camera& camera,
-    const vec2& resolution,
     Image& image,
     const vec2 threadInfo) {
   Ray ray{.origin = camera.position};
@@ -445,7 +439,11 @@ void render(
   const uint samples = 32;
   uint rngState{1031};
 
-  for (auto idx = atomic_idx.fetch_add(1, std::memory_order_relaxed); idx < image.data.size(); idx = atomic_idx.fetch_add(1, std::memory_order_relaxed)) {
+  vec2 resolution{image.width, image.height};
+
+  for (auto idx = atomicIdx.fetch_add(1, std::memory_order_relaxed);
+       idx < image.data.size();
+       idx = atomicIdx.fetch_add(1, std::memory_order_relaxed)) {
     if (threadInfo.x < 1) {
       std::cout << "\r" << int(101.f * (float)idx / image.data.size()) << "%";
     }
@@ -467,8 +465,6 @@ void render(
 }
 
 int main() {
-  uint rngState{4097};
-
   const uint width{750};
   const uint height{400};
 
@@ -523,19 +519,23 @@ int main() {
 
   start = std::chrono::steady_clock::now();
 
-  uint numThreads{6};
-  std::thread t0(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{0, numThreads});
-  std::thread t1(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{1, numThreads});
-  std::thread t2(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{2, numThreads});
-  std::thread t3(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{3, numThreads});
-  std::thread t4(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{4, numThreads});
-  std::thread t5(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{5, numThreads});
-  t0.join();
-  t1.join();
-  t2.join();
-  t3.join();
-  t4.join();
-  t5.join();
+  uint numThreads{8};
+  std::vector<std::thread> threads;
+
+  for (uint i = 0u; i < numThreads; i++) {
+    threads.push_back(std::thread(render,
+                                  std::ref(scene),
+                                  std::ref(normals),
+                                  std::ref(bvh),
+                                  std::ref(sceneIndices),
+                                  std::ref(camera),
+                                  std::ref(image),
+                                  vec2{i, numThreads}));
+  }
+
+  for (auto& t : threads) {
+    t.join();
+  }
 
   elapsed_seconds = std::chrono::steady_clock::now() - start;
   std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
