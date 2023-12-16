@@ -221,7 +221,7 @@ void buildBVH(
 
 //-------------------------- Traverse BVH ---------------------------
 
-float intersectBVH(
+void intersectBVH(
     Ray& ray,
     const std::vector<BVHNode>& bvh,
     const std::vector<Triangle>& scene,
@@ -229,8 +229,6 @@ float intersectBVH(
     const uint nodeIdx,
     uint& hitIndex,
     uint& count) {
-  float t = FLT_MAX;
-
   const BVHNode* node = &bvh[nodeIdx];
   std::stack<const BVHNode*> stack;
 
@@ -239,8 +237,8 @@ float intersectBVH(
     if (node->count > 0) {
       for (uint i = 0; i < node->count; i++) {
         float distance = intersect(ray, scene[sceneIndices[node->leftFirst + i]]);
-        if (distance > 0.0f && distance < t) {
-          t = distance;
+        if (distance < ray.t) {
+          ray.t = distance;
           hitIndex = sceneIndices[node->leftFirst + i];
         }
       }
@@ -281,6 +279,7 @@ float intersectBVH(
       // If closer node is hit, consider it for the next loop
       node = child1;
       count++;
+
       // If the farther node is hit, place it on the stack
       if (dist2 != FLT_MAX) {
         count++;
@@ -288,7 +287,6 @@ float intersectBVH(
       }
     }
   }
-  return t;
 }
 
 //-------------------------- Render ---------------------------
@@ -311,22 +309,21 @@ vec3 getNormal(const Triangle& triangle) {
   return normalize(cross(triangle.v0 - triangle.v1, triangle.v0 - triangle.v2));
 }
 
-float metalness = 0.0;
-float roughness = 0.01;
-vec3 albedo = vec3(1);
+const float metalness{0.0};
+const float roughness{0.01};
+const vec3 albedo{1};
 
 // Index of refraction for common dielectrics. Corresponds to F0 0.04
-float IOR = 1.5;
+const float IOR{1.5f};
 
 // Reflectance of the surface when looking straight at it along the negative normal
-vec3 F0 = mix(vec3(pow(IOR - 1.0, 2.0) / pow(IOR + 1.0, 2.0)), albedo, metalness);
+vec3 F0 = mix(vec3(pow(IOR - 1.0f, 2.0f) / pow(IOR + 1.0f, 2.0f)), albedo, metalness);
 
 vec3 getIllumination(Ray& ray,
                      const std::vector<BVHNode>& bvh,
                      const std::vector<Triangle>& scene,
                      const std::vector<vec3>& normals,
                      const std::vector<uint>& sceneIndices,
-                     const uint nodeIdx,
                      uint& rngState,
                      int& bounceCount,
                      uint& testCount) {
@@ -337,41 +334,39 @@ vec3 getIllumination(Ray& ray,
   vec3 col{0};
   uint hitIndex{};
 
-  float t = intersectBVH(ray, bvh, scene, sceneIndices, nodeIdx, hitIndex, testCount);
+  intersectBVH(ray, bvh, scene, sceneIndices, 0, hitIndex, testCount);
 
-  if (t > 0.0f && t < ray.t) {
-    ray.t = t;
+  if (ray.t > 0.0f && ray.t < FLT_MAX) {
     vec3 p = ray.origin + ray.direction * ray.t;
     vec3 N = normals[hitIndex];
     p += 1e-4f * N;
     vec3 V = -ray.direction;
 
     //--------------------- Diffuse ------------------------
-
-    vec2 Xi = getRandomVec2(rngState);
-
-    vec3 sampleDir = importanceSampleCosine(Xi, N);
-    Ray sampleRay{p, sampleDir, 1.0f / sampleDir, FLT_MAX};
-
     vec3 diffuse{0};
-    if (metalness < 1.0) {
+    if (metalness < 1.0f) {
+      vec2 Xi = getRandomVec2(rngState);
+
+      vec3 sampleDir = importanceSampleCosine(Xi, N);
+      Ray sampleRay{p, sampleDir, 1.0f / sampleDir, FLT_MAX};
+
       /*
           The discrete Riemann sum for the lighting equation is
           1/N * Σ(brdf(l, v) * L(l) * dot(l, n)) / pdf(l))
           Lambertian BRDF is c/PI and the pdf for cosine sampling is dot(l, n)/PI
           PI term and dot products cancel out leaving just c * L(l)
       */
-      diffuse = albedo * getIllumination(sampleRay, bvh, scene, normals, sceneIndices, 0, rngState, bounceCount, testCount);
+      diffuse = albedo * getIllumination(sampleRay, bvh, scene, normals, sceneIndices, rngState, bounceCount, testCount);
     }
 
     //--------------------- Specular ------------------------
 
-    Xi = getRandomVec2(rngState);
+    vec2 Xi = getRandomVec2(rngState);
     // Get a random halfway vector around the surface normal (in world space)
     vec3 H = importanceSampleGGX(Xi, N, roughness);
 
     // Generate sample direction as view ray reflected around h (note sign)
-    sampleDir = normalize(reflect(-V, H));
+    vec3 sampleDir = normalize(reflect(-V, H));
 
     float NdotL = dot_c(N, sampleDir);
     float NdotV = dot_c(N, V);
@@ -397,8 +392,8 @@ vec3 getIllumination(Ray& ray,
 
     // Simplified from the above
 
-    sampleRay = Ray(p, sampleDir, 1.0f / sampleDir, FLT_MAX);
-    vec3 specular = (getIllumination(sampleRay, bvh, scene, normals, sceneIndices, 0, rngState, bounceCount, testCount) * F * G * VdotH) / (NdotV * NdotH);
+    Ray sampleRay{p, sampleDir, 1.0f / sampleDir, FLT_MAX};
+    vec3 specular = (getIllumination(sampleRay, bvh, scene, normals, sceneIndices, rngState, bounceCount, testCount) * F * G * VdotH) / (NdotV * NdotH);
 
     // Combine diffuse and specular
     vec3 kD = (1.0f - F) * (1.0f - metalness);
@@ -407,6 +402,7 @@ vec3 getIllumination(Ray& ray,
   } else {
     col = getEnvironment(ray.direction);
   }
+
   return col;
 }
 
@@ -463,7 +459,7 @@ void render(
       ray.t = FLT_MAX;
       int bounces = 10;
       uint bvhTests = 0u;
-      image[idx] += getIllumination(ray, bvh, scene, normals, sceneIndices, 0, rngState, bounces, bvhTests);
+      image[idx] += getIllumination(ray, bvh, scene, normals, sceneIndices, rngState, bounces, bvhTests);
     }
 
     image[idx] /= samples;
@@ -473,8 +469,8 @@ void render(
 }
 
 int main() {
-  const uint width{1500};
-  const uint height{800};
+  const uint width{750};
+  const uint height{400};
 
   const vec2 resolution{width, height};
 
@@ -493,19 +489,27 @@ int main() {
 
   // ----- Load model, generate normals and indices ----- //
 
+  auto start{std::chrono::steady_clock::now()};
+
+  std::cout << "Load model...";
   std::vector<Triangle> scene = loadModel("models/bust-of-menelaus.stl");
 
+  std::cout << "\rGenerate normals...";
   std::vector<vec3> normals{scene.size()};
   for (uint i = 0; i < scene.size(); i++) {
     normals[i] = getNormal(scene[i]);
   }
 
+  std::cout << "\rGenerate indices...";
   std::vector<uint> sceneIndices(scene.size());
-
   // Populate scene indices sequentially [0...N)
   for (uint i = 0u; i < sceneIndices.size(); i++) {
     sceneIndices[i] = i;
   }
+
+  std::chrono::duration<double> elapsed_seconds{std::chrono::steady_clock::now() - start};
+  std::cout << "\rModel preparation time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
+  std::cout << "Triangles: " << scene.size() << std::endl;
 
   // ----- Build BVH ----- //
 
@@ -515,12 +519,10 @@ int main() {
   uint rootNodeIdx = 0;
   uint nodesUsed = 1;
 
-  auto start{std::chrono::steady_clock::now()};
+  start = std::chrono::steady_clock::now();
   buildBVH(bvh, scene, sceneIndices, rootNodeIdx, nodesUsed);
-  std::chrono::duration<double> elapsed_seconds{std::chrono::steady_clock::now() - start};
+  elapsed_seconds = std::chrono::steady_clock::now() - start;
   std::cout << "BVH build time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
-
-  std::cout << "Triangles: " << scene.size() << std::endl;
   std::cout << "Nodes: " << nodesUsed << std::endl;
 
   // ----- Render scene ----- //
