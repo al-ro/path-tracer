@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
@@ -427,6 +428,8 @@ void printProgress(double percentage) {
   fflush(stdout);
 }
 
+std::atomic<uint> atomic_idx{0u};
+
 void render(
     const std::vector<Triangle>& scene,
     const std::vector<vec3>& normals,
@@ -435,39 +438,31 @@ void render(
     const Camera& camera,
     const vec2& resolution,
     Image& image,
-    vec2 threadInfo) {
+    const vec2 threadInfo) {
   Ray ray{.origin = camera.position};
   vec2 fragCoord{};
 
-  const uint samples = 16;
+  const uint samples = 32;
   uint rngState{1031};
 
-  uint tileSize = resolution.y / threadInfo.y;
-
-  uint startRow = threadInfo.x * tileSize;
-  uint endRow = startRow + tileSize;
-
-  for (uint y = startRow; y < endRow; y++) {
-    if (threadInfo.x == 0) {
-      printProgress(y / float(endRow));
+  for (auto idx = atomic_idx.fetch_add(1, std::memory_order_relaxed); idx < image.data.size(); idx = atomic_idx.fetch_add(1, std::memory_order_relaxed)) {
+    if (threadInfo.x < 1) {
+      std::cout << "\r" << int(101.f * (float)idx / image.data.size()) << "%";
     }
-    for (uint x = 0u; x < resolution.x; x++) {
-      fragCoord = vec2{x, y};
-      uint idx = fragCoord.y * resolution.x + fragCoord.x;
+    fragCoord = vec2{(float)(idx % image.width), std::floor((float)idx / image.width)};
 
-      for (uint s = 0u; s < samples; s++) {
-        vec2 fC = fragCoord + 0.5f * (2.0f * getRandomVec2(rngState) - 1.0f);
-        ray.direction = rayDirection(resolution, camera.fieldOfView, fC);
-        ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
-        ray.invDirection = 1.0f / ray.direction;
-        ray.t = FLT_MAX;
+    for (uint s = 0u; s < samples; s++) {
+      vec2 fC = fragCoord + 0.5f * (2.0f * getRandomVec2(rngState) - 1.0f);
+      ray.direction = rayDirection(resolution, camera.fieldOfView, fC);
+      ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
+      ray.invDirection = 1.0f / ray.direction;
+      ray.t = FLT_MAX;
 
-        image[idx] += getIllumination(ray, bvh, scene, normals, sceneIndices, 0, rngState, 6);
-      }
-      image[idx] /= samples;
-      image[idx] *= 1.0f - vec3{expf(-image[idx].r), expf(-image[idx].g), expf(-image[idx].b)};
-      image[idx] = pow(image[idx], vec3{1.0f / 2.2f});
+      image[idx] += getIllumination(ray, bvh, scene, normals, sceneIndices, 0, rngState, 10);
     }
+    image[idx] /= samples;
+    image[idx] *= 1.0f - vec3{expf(-image[idx].r), expf(-image[idx].g), expf(-image[idx].b)};
+    image[idx] = pow(image[idx], vec3{1.0f / 2.2f});
   }
 }
 
@@ -528,11 +523,19 @@ int main() {
 
   start = std::chrono::steady_clock::now();
 
-  uint numThreads{2};
+  uint numThreads{6};
   std::thread t0(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{0, numThreads});
   std::thread t1(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{1, numThreads});
+  std::thread t2(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{2, numThreads});
+  std::thread t3(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{3, numThreads});
+  std::thread t4(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{4, numThreads});
+  std::thread t5(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{5, numThreads});
   t0.join();
   t1.join();
+  t2.join();
+  t3.join();
+  t4.join();
+  t5.join();
 
   elapsed_seconds = std::chrono::steady_clock::now() - start;
   std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
