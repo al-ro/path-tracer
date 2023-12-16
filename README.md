@@ -5,11 +5,7 @@ This work is in progress.
 Basic C++ path tracer with bounding volume hierarchy (BVH) following [the tutorial series by jbikker](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
 
 <p align="center" width="100%">
-    <img src="images/screenshot_environment.png" alt="Environment screenshot">
-</p>
-
-<p align="center" width="100%">
-    <img src="images/screenshot_gradient.png" alt="Gradient screenshot">
+    <img src="images/screenshot.png" alt="Screenshot">
 </p>
 
 ["Bust of Menelaus" by Scan The World](https://www.myminifactory.com/object/3d-print-bust-of-menelaus-32197)

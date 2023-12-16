@@ -17,23 +17,6 @@ using namespace glm;
 #define INV2PI (1.0f / (2.0f * M_PI))
 #define INVPI (1.0f / M_PI)
 
-//-------------------------- Rays ---------------------------
-
-// Generate default ray for a fragment based on its position, the image and the camera
-vec3 rayDirection(const vec2& resolution, float fieldOfView, const vec2& fragCoord) {
-  vec2 xy = fragCoord - 0.5f * resolution;
-  float z = (0.5f * resolution.y) / tan(0.5f * radians(fieldOfView));
-  return normalize(vec3(xy, -z));
-}
-
-mat3 viewMatrix(vec3 camera, vec3 at, vec3 up) {
-  vec3 zaxis = normalize(at - camera);
-  vec3 xaxis = normalize(cross(zaxis, up));
-  vec3 yaxis = cross(xaxis, zaxis);
-
-  return mat3(xaxis, yaxis, -zaxis);
-}
-
 //-------------------------- Construct BVH ---------------------------
 
 void updateNodeBounds(BVHNode& node,
@@ -244,7 +227,8 @@ float intersectBVH(
     const std::vector<Triangle>& scene,
     const std::vector<uint>& sceneIndices,
     const uint nodeIdx,
-    uint& hitIndex) {
+    uint& hitIndex,
+    uint& count) {
   float t = FLT_MAX;
 
   const BVHNode* node = &bvh[nodeIdx];
@@ -296,9 +280,10 @@ float intersectBVH(
     } else {
       // If closer node is hit, consider it for the next loop
       node = child1;
-
+      count++;
       // If the farther node is hit, place it on the stack
       if (dist2 != FLT_MAX) {
+        count++;
         stack.push(child2);
       }
     }
@@ -343,19 +328,18 @@ vec3 getIllumination(Ray& ray,
                      const std::vector<uint>& sceneIndices,
                      const uint nodeIdx,
                      uint& rngState,
-                     int bounceCount) {
+                     int& bounceCount,
+                     uint& testCount) {
   if (--bounceCount < 0) {
     return vec3{0};
   }
 
-  bool hit = true;
   vec3 col{0};
   uint hitIndex{};
 
-  float t = intersectBVH(ray, bvh, scene, sceneIndices, nodeIdx, hitIndex);
-  hit = t > 0.0f && t < ray.t;
+  float t = intersectBVH(ray, bvh, scene, sceneIndices, nodeIdx, hitIndex, testCount);
 
-  if (hit) {
+  if (t > 0.0f && t < ray.t) {
     ray.t = t;
     vec3 p = ray.origin + ray.direction * ray.t;
     vec3 N = normals[hitIndex];
@@ -369,13 +353,16 @@ vec3 getIllumination(Ray& ray,
     vec3 sampleDir = importanceSampleCosine(Xi, N);
     Ray sampleRay{p, sampleDir, 1.0f / sampleDir, FLT_MAX};
 
-    /*
-        The discrete Riemann sum for the lighting equation is
-        1/N * Σ(brdf(l, v) * L(l) * dot(l, n)) / pdf(l))
-        Lambertian BRDF is c/PI and the pdf for cosine sampling is dot(l, n)/PI
-        PI term and dot products cancel out leaving just c * L(l)
-    */
-    vec3 diffuse = albedo * getIllumination(sampleRay, bvh, scene, normals, sceneIndices, 0, rngState, bounceCount);
+    vec3 diffuse{0};
+    if (metalness < 1.0) {
+      /*
+          The discrete Riemann sum for the lighting equation is
+          1/N * Σ(brdf(l, v) * L(l) * dot(l, n)) / pdf(l))
+          Lambertian BRDF is c/PI and the pdf for cosine sampling is dot(l, n)/PI
+          PI term and dot products cancel out leaving just c * L(l)
+      */
+      diffuse = albedo * getIllumination(sampleRay, bvh, scene, normals, sceneIndices, 0, rngState, bounceCount, testCount);
+    }
 
     //--------------------- Specular ------------------------
 
@@ -411,7 +398,7 @@ vec3 getIllumination(Ray& ray,
     // Simplified from the above
 
     sampleRay = Ray(p, sampleDir, 1.0f / sampleDir, FLT_MAX);
-    vec3 specular = (getIllumination(sampleRay, bvh, scene, normals, sceneIndices, 0, rngState, bounceCount) * F * G * VdotH) / (NdotV * NdotH);
+    vec3 specular = (getIllumination(sampleRay, bvh, scene, normals, sceneIndices, 0, rngState, bounceCount, testCount) * F * G * VdotH) / (NdotV * NdotH);
 
     // Combine diffuse and specular
     vec3 kD = (1.0f - F) * (1.0f - metalness);
@@ -423,6 +410,24 @@ vec3 getIllumination(Ray& ray,
   return col;
 }
 
+//-------------------------- Rays ---------------------------
+
+// Generate default ray for a fragment based on its position, the image and the camera
+vec3 rayDirection(const vec2& resolution, float fieldOfView, const vec2& fragCoord) {
+  vec2 xy = fragCoord - 0.5f * resolution;
+  float z = (0.5f * resolution.y) / tan(0.5f * radians(fieldOfView));
+  return normalize(vec3(xy, -z));
+}
+
+mat3 viewMatrix(vec3 camera, vec3 at, vec3 up) {
+  vec3 zaxis = normalize(at - camera);
+  vec3 xaxis = normalize(cross(zaxis, up));
+  vec3 yaxis = cross(xaxis, zaxis);
+
+  return mat3(xaxis, yaxis, -zaxis);
+}
+
+// Atomically incremented index to control which threads works on which pixel
 std::atomic<uint> atomicIdx{0u};
 
 void render(
@@ -447,6 +452,7 @@ void render(
     if (threadInfo.x < 1) {
       std::cout << "\r" << int(101.f * (float)idx / image.data.size()) << "%";
     }
+
     fragCoord = vec2{(float)(idx % image.width), std::floor((float)idx / image.width)};
 
     for (uint s = 0u; s < samples; s++) {
@@ -455,9 +461,11 @@ void render(
       ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
       ray.invDirection = 1.0f / ray.direction;
       ray.t = FLT_MAX;
-
-      image[idx] += getIllumination(ray, bvh, scene, normals, sceneIndices, 0, rngState, 10);
+      int bounces = 10;
+      uint bvhTests = 0u;
+      image[idx] += getIllumination(ray, bvh, scene, normals, sceneIndices, 0, rngState, bounces, bvhTests);
     }
+
     image[idx] /= samples;
     image[idx] *= 1.0f - vec3{expf(-image[idx].r), expf(-image[idx].g), expf(-image[idx].b)};
     image[idx] = pow(image[idx], vec3{1.0f / 2.2f});
@@ -465,8 +473,8 @@ void render(
 }
 
 int main() {
-  const uint width{750};
-  const uint height{400};
+  const uint width{1500};
+  const uint height{800};
 
   const vec2 resolution{width, height};
 
