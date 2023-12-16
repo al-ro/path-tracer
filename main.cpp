@@ -334,7 +334,7 @@ vec3 albedo = vec3(1);
 float IOR = 1.5;
 
 // Reflectance of the surface when looking straight at it along the negative normal
-vec3 F0 = vec3(pow(IOR - 1.0, 2.0) / pow(IOR + 1.0, 2.0));
+vec3 F0 = mix(vec3(pow(IOR - 1.0, 2.0) / pow(IOR + 1.0, 2.0)), albedo, metalness);
 
 vec3 getIllumination(Ray& ray,
                      const std::vector<BVHNode>& bvh,
@@ -522,6 +522,7 @@ int main() {
   uint numThreads{8};
   std::vector<std::thread> threads;
 
+  // Launch threads
   for (uint i = 0u; i < numThreads; i++) {
     threads.push_back(std::thread(render,
                                   std::ref(scene),
@@ -533,6 +534,7 @@ int main() {
                                   vec2{i, numThreads}));
   }
 
+  // Wait for all threads to finish
   for (auto& t : threads) {
     t.join();
   }

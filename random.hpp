@@ -12,7 +12,7 @@ uint pcg_hash(uint& seed) {
   return (word >> 22u) ^ word;
 }
 
-float getRandom(uint& state) {
+float getRandomFloat(uint& state) {
   return pcg_hash(state) * INV_MAX_UINT32;
 }
 
