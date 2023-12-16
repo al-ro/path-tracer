@@ -13,13 +13,13 @@ Basic C++ path tracer with bounding volume hierarchy (BVH) following [the tutori
 ## Features
 
 - BVH construction and traversal
-- Cooke-Torrance
-- Trowbridge-Reitz specular
+- Cook-Torrance
+- Trowbridge-Reitz (GGX) specular
 - Lambertian diffuse
 - Importance sampling
 
 ## Dependencies
 
 - [GLM](https://github.com/g-truc/glm) for maths functions and data structures
-- [stb_image_write.h](https://github.com/nothings/stb) for writing images
+- [stb](https://github.com/nothings/stb) for reading and writing images
 - [stl_reader.h](https://github.com/sreiter/stl_reader) for reading STL files

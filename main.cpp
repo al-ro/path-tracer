@@ -5,11 +5,11 @@
 #include <thread>
 #include <vector>
 
-#include "brdf.h"
-#include "intersection.h"
-#include "lib/stl_reader.h"
-#include "output.h"
-#include "random.h"
+#include "brdf.hpp"
+#include "input.hpp"
+#include "intersection.hpp"
+#include "output.hpp"
+#include "random.hpp"
 
 using namespace glm;
 
@@ -425,7 +425,7 @@ void render(
     const std::vector<uint>& sceneIndices,
     const Camera& camera,
     const vec2& resolution,
-    std::vector<vec3>& image,
+    Image& image,
     vec2 threadInfo) {
   Ray ray{.origin = camera.position};
   vec2 fragCoord{};
@@ -456,6 +456,7 @@ void render(
         image[idx] += getIllumination(ray, bvh, scene, normals, sceneIndices, 0, rngState, 10);
       }
       image[idx] /= samples;
+      image[idx] = pow(image[idx], vec3{1.0f / 2.2f});
     }
   }
 }
@@ -468,10 +469,10 @@ int main() {
 
   const vec2 resolution{width, height};
 
-  std::vector<vec3> image(width * height);
+  Image image{width, height};
 
   // Initialize data to black
-  for (auto& v : image) {
+  for (auto& v : image.data) {
     v = vec3{0};
   }
 
@@ -481,94 +482,54 @@ int main() {
       .up = normalize(vec3{0, 1, 0}),
       .fieldOfView = 45.0f};
 
-  std::vector<Triangle> scene(12582);
+  // ----- Load model, generate normals and indices ----- //
 
-  FILE* file = fopen("obj/unity.tri", "r");
-  float a, b, c, d, e, f, g, h, i;
-  for (uint t = 0u; t < 12582u; t++) {
-    int result = fscanf(file, "%f %f %f %f %f %f %f %f %f\n",
-                        &a, &b, &c, &d, &e, &f, &g, &h, &i);
-    scene[t].v0 = vec3{a, b, c};
-    scene[t].v1 = vec3{d, e, f};
-    scene[t].v2 = vec3{g, h, i};
-  }
-  fclose(file);
+  std::vector<Triangle> scene = loadModel("models/bust-of-menelaus.stl");
 
-  stl_reader::StlMesh<float, uint> mesh("obj/bust-of-menelaus.stl");
-  std::vector<Triangle> scene2{mesh.num_tris()};
-  std::vector<vec3> normals{scene2.size()};
-  for (uint i = 0; i < scene2.size(); i++) {
-    scene2[i].v0 = rotateX(vec3{mesh.tri_corner_coords(i, 0)[0], mesh.tri_corner_coords(i, 0)[1], mesh.tri_corner_coords(i, 0)[2]}, -0.5f * 3.1415926f);
-    scene2[i].v1 = rotateX(vec3{mesh.tri_corner_coords(i, 1)[0], mesh.tri_corner_coords(i, 1)[1], mesh.tri_corner_coords(i, 1)[2]}, -0.5f * 3.1415926f);
-    scene2[i].v2 = rotateX(vec3{mesh.tri_corner_coords(i, 2)[0], mesh.tri_corner_coords(i, 2)[1], mesh.tri_corner_coords(i, 2)[2]}, -0.5f * 3.1415926f);
-    normals[i] = getNormal(scene2[i]);
+  std::vector<vec3> normals{scene.size()};
+  for (uint i = 0; i < scene.size(); i++) {
+    normals[i] = getNormal(scene[i]);
   }
 
-  vec3 aabbMin = vec3(FLT_MAX);
-  vec3 aabbMax = vec3(-FLT_MAX);
-
-  for (auto& triangle : scene2) {
-    aabbMin = min(aabbMin, triangle.v0);
-    aabbMin = min(aabbMin, triangle.v1);
-    aabbMin = min(aabbMin, triangle.v2);
-    aabbMax = max(aabbMax, triangle.v0);
-    aabbMax = max(aabbMax, triangle.v1);
-    aabbMax = max(aabbMax, triangle.v2);
-  }
-
-  vec3 centre = aabbMin + 0.5f * (aabbMax - aabbMin);
-
-  for (auto& triangle : scene2) {
-    triangle.v0 -= centre;
-    triangle.v1 -= centre;
-    triangle.v2 -= centre;
-  }
-
-  for (auto& triangle : scene2) {
-    triangle.centroid = (triangle.v0 + triangle.v1 + triangle.v2) / 3.0f;
-  }
-
-  std::vector<uint> sceneIndices(scene2.size());
+  std::vector<uint> sceneIndices(scene.size());
 
   // Populate scene indices sequentially [0...N)
   for (uint i = 0u; i < sceneIndices.size(); i++) {
     sceneIndices[i] = i;
   }
 
+  // ----- Build BVH ----- //
+
   // BVH tree with reserved space for 2N-1 nodes which is the maximum number of nodes in a binary tree with N leaves
-  std::vector<BVHNode> bvh{2 * scene2.size() - 1};
+  std::vector<BVHNode> bvh{2 * scene.size() - 1};
 
   uint rootNodeIdx = 0;
   uint nodesUsed = 1;
 
-  // ----- Build BVH ----- //
-
   auto start{std::chrono::steady_clock::now()};
-  buildBVH(bvh, scene2, sceneIndices, rootNodeIdx, nodesUsed);
+  buildBVH(bvh, scene, sceneIndices, rootNodeIdx, nodesUsed);
   std::chrono::duration<double> elapsed_seconds{std::chrono::steady_clock::now() - start};
   std::cout << "BVH build time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
-  std::cout << "Triangles: " << scene2.size() << std::endl;
+  std::cout << "Triangles: " << scene.size() << std::endl;
   std::cout << "Nodes: " << nodesUsed << std::endl;
 
   // ----- Render scene ----- //
 
   start = std::chrono::steady_clock::now();
 
-  uint numThreads{3};
-  std::thread t0(render, std::ref(scene2), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{0, numThreads});
-  std::thread t1(render, std::ref(scene2), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{1, numThreads});
-  std::thread t2(render, std::ref(scene2), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{2, numThreads});
+  uint numThreads{2};
+  std::thread t0(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{0, numThreads});
+  std::thread t1(render, std::ref(scene), std::ref(normals), std::ref(bvh), std::ref(sceneIndices), std::ref(camera), std::ref(resolution), std::ref(image), vec2{1, numThreads});
   t0.join();
   t1.join();
-  t2.join();
 
   elapsed_seconds = std::chrono::steady_clock::now() - start;
   std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
   // ----- Output ----- //
 
-  outputToFile(resolution, image);
+  outputToFile(image);
 
   return EXIT_SUCCESS;
 }

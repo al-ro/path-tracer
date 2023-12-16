@@ -1,4 +1,4 @@
-#include "intersection.h"
+#include "intersection.hpp"
 
 // Möller–Trumbore
 float intersect(const Ray& ray, const Triangle& triangle) {

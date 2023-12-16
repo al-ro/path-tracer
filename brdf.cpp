@@ -1,4 +1,4 @@
-#include "brdf.h"
+#include "brdf.hpp"
 
 // Get orthonormal basis from surface normal
 // https://graphics.pixar.com/library/OrthonormalB/paper.pdf
@@ -62,7 +62,7 @@ float geometry(float cosTheta, float k) {
 }
 
 float smiths(float NdotV, float NdotL, float roughness) {
-  float k = roughness / 2.0f;
+  float k = roughness * 0.5f;
   return geometry(NdotV, k) * geometry(NdotL, k);
 }
 

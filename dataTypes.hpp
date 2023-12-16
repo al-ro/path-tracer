@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/rotate_vector.hpp>
+#include <vector>
 
 using namespace glm;
 
@@ -23,18 +24,18 @@ struct AABB {
   vec3 max{-FLT_MAX};
 
   // Increase AABB dimensions by including new point p
-  void grow(vec3 p) {
+  inline void grow(vec3 p) {
     min = glm::min(min, p);
     max = glm::max(max, p);
   }
 
   // Increase AABB dimensions by including new AABB b
-  void grow(AABB b) {
+  inline void grow(AABB b) {
     min = glm::min(min, b.min);
     max = glm::max(max, b.max);
   }
   // Return surface are 2xy * 2xz * 2yz
-  float area() {
+  inline float area() {
     vec3 dim = max - min;
     return 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);
   }
@@ -80,4 +81,16 @@ struct Camera {
   vec3 up{};
   // FOV in degrees
   float fieldOfView{};
+};
+
+struct Image {
+  uint width{};
+  uint height{};
+  std::vector<vec3> data{width * height};
+  inline vec3 operator[](uint i) const {
+    return data[i];
+  }
+  inline vec3& operator[](uint i) {
+    return data[i];
+  }
 };
