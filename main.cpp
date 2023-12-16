@@ -13,6 +13,9 @@
 
 using namespace glm;
 
+#define INV2PI (1.0f / (2.0f * M_PI))
+#define INVPI (1.0f / M_PI)
+
 //-------------------------- Rays ---------------------------
 
 // Generate default ray for a fragment based on its position, the image and the camera
@@ -308,8 +311,14 @@ float dot_c(const vec3& a, const vec3& b) {
   return max(dot(a, b), 1e-5f);
 }
 
+Image environment = loadEnvironmentImage("environment/evening_road_01_puresky_2k.hdr");
+
 vec3 getEnvironment(const vec3& direction) {
-  return vec3{0.5f + 0.5f * direction.y};
+  uint u = environment.width * atan2f(direction.z, direction.x) * INV2PI - 0.5f;
+  uint v = environment.height * acosf(direction.y) * INVPI - 0.5f;
+  uint idx = min(u + v * environment.width, (uint)(environment.data.size()) - 1);
+
+  return 0.5f * environment[idx];
 }
 
 vec3 getNormal(const Triangle& triangle) {
@@ -318,7 +327,7 @@ vec3 getNormal(const Triangle& triangle) {
 
 float metalness = 0.0;
 float roughness = 0.01;
-vec3 albedo = vec3(1);
+vec3 albedo = vec3(1.0);
 
 // Index of refraction for common dielectrics. Corresponds to F0 0.04
 float IOR = 1.5;
@@ -430,7 +439,7 @@ void render(
   Ray ray{.origin = camera.position};
   vec2 fragCoord{};
 
-  const uint samples = 32;
+  const uint samples = 16;
   uint rngState{1031};
 
   uint tileSize = resolution.y / threadInfo.y;
@@ -453,9 +462,10 @@ void render(
         ray.invDirection = 1.0f / ray.direction;
         ray.t = FLT_MAX;
 
-        image[idx] += getIllumination(ray, bvh, scene, normals, sceneIndices, 0, rngState, 10);
+        image[idx] += getIllumination(ray, bvh, scene, normals, sceneIndices, 0, rngState, 6);
       }
       image[idx] /= samples;
+      image[idx] *= 1.0f - vec3{expf(-image[idx].r), expf(-image[idx].g), expf(-image[idx].b)};
       image[idx] = pow(image[idx], vec3{1.0f / 2.2f});
     }
   }

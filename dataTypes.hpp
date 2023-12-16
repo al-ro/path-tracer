@@ -34,6 +34,7 @@ struct AABB {
     min = glm::min(min, b.min);
     max = glm::max(max, b.max);
   }
+
   // Return surface are 2xy * 2xz * 2yz
   inline float area() {
     vec3 dim = max - min;
@@ -87,6 +88,7 @@ struct Image {
   uint width{};
   uint height{};
   std::vector<vec3> data{width * height};
+
   inline vec3 operator[](uint i) const {
     return data[i];
   }

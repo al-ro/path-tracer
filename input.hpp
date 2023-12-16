@@ -5,5 +5,6 @@
 
 using namespace glm;
 
-std::vector<vec3> loadImage(std::string path, vec2& resolution);
+Image loadImage(std::string path);
+Image loadEnvironmentImage(std::string path);
 std::vector<Triangle> loadModel(std::string path);
