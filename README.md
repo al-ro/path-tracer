@@ -23,6 +23,7 @@ Environment map from [HDR Haven](https://hdri-haven.com/)
 ## Use
 
 Running outputs parameters and progress to the console
+
 Resulting image is output as *output.bmp*
 
 - make clean (to remove old executable)
