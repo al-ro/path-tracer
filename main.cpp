@@ -74,7 +74,7 @@ vec3 getIllumination(Ray ray,
   for (auto& mesh : scene) {
     HitRecord hit = intersect(ray, mesh, testCount);
     if (hit.ray.t < ray.t && closestHit.ray.t > hit.ray.t) {
-      closestHit = hit;  //{hit.hitIndex, hit.ray, hit.mesh};
+      closestHit = hit;
     }
   }
 
@@ -98,7 +98,7 @@ vec3 getIllumination(Ray ray,
 
       vec3 sampleDir = importanceSampleCosine(Xi, N);
       Ray sampleRay{p, sampleDir, 1.0f / sampleDir, FLT_MAX};
-      sampleRay.origin += 1e-4f * sampleRay.direction;
+      sampleRay.origin += 1e-4f * N;
 
       /*
           The discrete Riemann sum for the lighting equation is
@@ -143,7 +143,7 @@ vec3 getIllumination(Ray ray,
     // Simplified from the above
 
     Ray sampleRay{p, sampleDir, 1.0f / sampleDir, FLT_MAX};
-    sampleRay.origin += 1e-4f * sampleRay.direction;
+    sampleRay.origin += 1e-4f * N;
 
     vec3 specular = (getIllumination(sampleRay, scene, rngState, bounceCount, testCount) * F * G * VdotH) / (NdotV * NdotH);
 
@@ -194,6 +194,7 @@ void render(
        idx < image.data.size();
        idx = atomicIdx.fetch_add(1, std::memory_order_relaxed)) {
     if (threadId < 1) {
+      // First thread outputs progress
       std::cout << "\r" << int(101.f * (float)idx / image.data.size()) << "%";
     }
 
@@ -203,6 +204,7 @@ void render(
     for (uint s = 0u; s < (renderBVH ? 1u : samples); s++) {
       vec2 fC = fragCoord;
       if (!renderBVH) {
+        // Jitter position for antialiasing
         fC += 0.5f * (2.0f * getRandomVec2(rngState) - 1.0f);
       }
       ray.direction = rayDirection(resolution, camera.fieldOfView, fC);
@@ -212,33 +214,40 @@ void render(
 
       uint bvhTests = 0u;
       if (renderBVH) {
-        HitRecord closestHit{};
+        // Get number of BVH tests for primary ray
         for (auto& mesh : scene) {
-          HitRecord hit = intersect(ray, mesh, bvhTests);
+          intersect(ray, mesh, bvhTests);
         }
         image[idx] = vec3(bvhTests);
       } else {
+        // Path trace scene
         int bounces = maxBounces;
         col += getIllumination(ray, scene, rngState, bounces, bvhTests);
       }
     }
     if (!renderBVH) {
+      // Average result
       col /= samples;
+      // Tonemapping
       col *= 1.0f - vec3{expf(-col.r), expf(-col.g), expf(-col.b)};
+      // Gamma correction
       col = pow(col, vec3{1.0f / 2.2f});
+      // Output data
       image[idx] = col;
     }
   }
 }
 
 int main(int argc, char** argv) {
+  // Default values
   uint width{750};
   uint height{400};
   uint samples{32};
   uint bounces{10};
   bool renderBVH{false};
 
-  for (;;) {
+  // Parse command line arguments
+  for (uint i = 0u; i < argc; i++) {
     switch (getopt(argc, argv, "w:h:s:b:a")) {
       case 'w':
         width = atoi(optarg);
@@ -260,7 +269,7 @@ int main(int argc, char** argv) {
         continue;
 
       default:
-        std::cout << "To specify width, height, samples and bounces use e.g. -w 750 -h 400 -s 32 -b 10\nUse -a to view BVH heat map" << std::endl;
+        std::cout << "To specify width, height, samples and bounces use e.g. -w 750 -h 400 -s 32 -b 10\nUse -a to view BVH heat map\n";
         break;
 
       case -1:
@@ -271,8 +280,6 @@ int main(int argc, char** argv) {
   }
 
   std::cout << "Dimensions: [" << width << ", " << height << "]\tSamples: " << samples << "\tBounces: " << bounces << std::endl;
-
-  const vec2 resolution{width, height};
 
   Image image{width, height};
 
