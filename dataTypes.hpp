@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/rotate_vector.hpp>
+#include <iostream>
 #include <vector>
 
 using namespace glm;
@@ -47,7 +48,7 @@ struct Triangle {
   vec3 v1{};
   vec3 v2{};
   // Location for spatial sorting
-  vec3 centroid{};
+  vec3 centroid{FLT_MAX};
 };
 
 /* Bounding volume hierarchy node */
@@ -96,3 +97,14 @@ struct Image {
     return data[i];
   }
 };
+
+inline std::ostream& operator<<(std::ostream& os, const mat4x4& m) {
+  for (uint i = 0; i < 4; i++) {
+    for (uint j = 0; j < 4; j++) {
+      os << m[i][j] << "\t";
+    }
+    os << "\n";
+  }
+
+  return os;
+}

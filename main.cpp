@@ -7,8 +7,11 @@
 #include <vector>
 
 #include "brdf.hpp"
+#include "bvh.hpp"
+#include "geometry.hpp"
 #include "input.hpp"
 #include "intersection.hpp"
+#include "mesh.hpp"
 #include "output.hpp"
 #include "random.hpp"
 
@@ -16,278 +19,6 @@ using namespace glm;
 
 #define INV2PI (1.0f / (2.0f * M_PI))
 #define INVPI (1.0f / M_PI)
-
-//-------------------------- Construct BVH ---------------------------
-
-void updateNodeBounds(BVHNode& node,
-                      const std::vector<Triangle>& scene,
-                      std::vector<uint>& sceneIndices) {
-  node.aabbMin = vec3(FLT_MAX);
-  node.aabbMax = vec3(-FLT_MAX);
-  for (uint i = 0; i < node.count; i++) {
-    const Triangle& leaf = scene[sceneIndices[node.leftFirst + i]];
-    node.aabbMin = min(node.aabbMin, leaf.v0);
-    node.aabbMin = min(node.aabbMin, leaf.v1);
-    node.aabbMin = min(node.aabbMin, leaf.v2);
-    node.aabbMax = max(node.aabbMax, leaf.v0);
-    node.aabbMax = max(node.aabbMax, leaf.v1);
-    node.aabbMax = max(node.aabbMax, leaf.v2);
-  }
-}
-
-// Determine triangle counts and bounds for given split candidate
-float evaluateSAH(BVHNode& node, uint axis, float pos,
-                  const std::vector<Triangle>& scene,
-                  std::vector<uint>& sceneIndices) {
-  AABB leftBox{};
-  AABB rightBox{};
-
-  uint leftCount{0};
-  uint rightCount{0};
-
-  for (uint i = 0; i < node.count; i++) {
-    const Triangle& triangle = scene[sceneIndices[node.leftFirst + i]];
-    if (triangle.centroid[axis] < pos) {
-      leftCount++;
-      leftBox.grow(triangle.v0);
-      leftBox.grow(triangle.v1);
-      leftBox.grow(triangle.v2);
-    } else {
-      rightCount++;
-      rightBox.grow(triangle.v0);
-      rightBox.grow(triangle.v1);
-      rightBox.grow(triangle.v2);
-    }
-  }
-
-  // Sum of the products of child box primitive counts and box surface areas
-  float cost = leftCount * leftBox.area() + rightCount * rightBox.area();
-  return cost > 0 ? cost : FLT_MAX;
-}
-
-// Determine best split axis and position using SAH
-float findBestSplitPlane(BVHNode& node,
-                         const std::vector<Triangle>& scene,
-                         std::vector<uint>& sceneIndices,
-                         uint& bestAxis, float& splitPos) {
-  float bestCost = FLT_MAX;
-  const uint COUNT = 64;
-
-  for (uint axis = 0u; axis < 3u; axis++) {
-    float boundsMin = FLT_MAX;
-    float boundsMax = -FLT_MAX;
-
-    // Split the space bounded by primitive centroids
-    for (uint i = 0u; i < node.count; i++) {
-      const Triangle& triangle = scene[sceneIndices[node.leftFirst + i]];
-      boundsMin = min(boundsMin, triangle.centroid[axis]);
-      boundsMax = max(boundsMax, triangle.centroid[axis]);
-    }
-
-    if (boundsMin == boundsMax) {
-      // Flat in given dimension
-      continue;
-    }
-
-    std::vector<Bin> bins{COUNT};
-    float binSize = COUNT / (boundsMax - boundsMin);
-
-    for (uint i = 0; i < node.count; i++) {
-      const Triangle& triangle = scene[sceneIndices[node.leftFirst + i]];
-      uint binIdx = min((float)COUNT - 1.0f, floor((triangle.centroid[axis] - boundsMin) * binSize));
-      bins[binIdx].count++;
-      bins[binIdx].bounds.grow(triangle.v0);
-      bins[binIdx].bounds.grow(triangle.v1);
-      bins[binIdx].bounds.grow(triangle.v2);
-    }
-
-    std::vector<float> leftArea(COUNT - 1u);
-    std::vector<uint> leftCount(COUNT - 1u);
-
-    std::vector<float> rightArea(COUNT - 1u);
-    std::vector<uint> rightCount(COUNT - 1u);
-
-    AABB leftBox;
-    uint leftSum{0};
-
-    AABB rightBox;
-    uint rightSum{0};
-
-    for (int i = 0; i < COUNT - 1; i++) {
-      leftSum += bins[i].count;
-      leftCount[i] = leftSum;
-      leftBox.grow(bins[i].bounds);
-      leftArea[i] = leftBox.area();
-
-      rightSum += bins[COUNT - 1 - i].count;
-      rightCount[COUNT - 2 - i] = rightSum;
-      rightBox.grow(bins[COUNT - 1 - i].bounds);
-      rightArea[COUNT - 2 - i] = rightBox.area();
-    }
-
-    float slabSize = (boundsMax - boundsMin) / COUNT;
-    for (uint i = 0; i < COUNT - 1; i++) {
-      float planeCost = 2.0f * leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
-      if (planeCost < bestCost) {
-        splitPos = boundsMin + slabSize * (i + 1u);
-        bestAxis = axis;
-        bestCost = planeCost;
-      }
-    }
-  }
-  return bestCost;
-}
-
-float getNodeCost(const BVHNode& node) {
-  vec3 dim = node.aabbMax - node.aabbMin;
-  float area = 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);
-  return node.count * area;
-}
-
-// Recursively divide BVH node down to child nodes and include them in the tree
-void subdivide(std::vector<BVHNode>& bvh,
-               const std::vector<Triangle>& scene,
-               std::vector<uint>& sceneIndices,
-               uint& nodeIdx,
-               uint& nodesUsed) {
-  BVHNode& node = bvh[nodeIdx];
-
-  // Determine best split axis and position using SAH
-  uint bestAxis{0};
-  float splitPos{0};
-  float bestSplitCost = findBestSplitPlane(node, scene, sceneIndices, bestAxis, splitPos);
-
-  if (bestSplitCost >= getNodeCost(node)) {
-    return;
-  }
-
-  // Traverse list of indices from front and back
-  uint i = node.leftFirst;
-  uint j = i + node.count - 1;
-  // While the elements are not the same
-  while (i <= j) {
-    // If element is to the left of the partition, skip over it
-    if (scene[sceneIndices[i]].centroid[bestAxis] < splitPos) {
-      i++;
-    } else {
-      // Swap the element with the element at the back
-      // Decrement rear index counter (suitability of swapped element is evaluated next loop iteration)
-      std::swap(sceneIndices[i], sceneIndices[j--]);
-    }
-  }
-
-  // Abort split if one of the sides is empty
-  uint leftCount = i - node.leftFirst;
-  if (leftCount == 0 || leftCount == node.count) {
-    return;
-  }
-
-  // Create child nodes. Left node is followed by right one
-  uint leftChildIdx = nodesUsed++;
-  uint rightChildIdx = nodesUsed++;
-
-  // Left has primitives [0...leftCount) of the parent node
-  bvh[leftChildIdx].leftFirst = node.leftFirst;
-  bvh[leftChildIdx].count = leftCount;
-
-  // Right has primitives [leftCount...count)
-  bvh[rightChildIdx].leftFirst = i;
-  bvh[rightChildIdx].count = node.count - leftCount;
-
-  // Mark parent node as an internal one with reference to left child node
-  node.leftFirst = leftChildIdx;
-  node.count = 0;
-
-  updateNodeBounds(bvh[leftChildIdx], scene, sceneIndices);
-  updateNodeBounds(bvh[rightChildIdx], scene, sceneIndices);
-
-  // Recurse
-  subdivide(bvh, scene, sceneIndices, leftChildIdx, nodesUsed);
-  subdivide(bvh, scene, sceneIndices, rightChildIdx, nodesUsed);
-}
-
-void buildBVH(
-    std::vector<BVHNode>& bvh,
-    const std::vector<Triangle>& scene,
-    std::vector<uint>& sceneIndices,
-    uint& rootNodeIdx,
-    uint& nodesUsed) {
-  BVHNode& root = bvh[rootNodeIdx];
-  root.leftFirst = 0;
-  root.count = scene.size();
-  updateNodeBounds(root, scene, sceneIndices);
-  subdivide(bvh, scene, sceneIndices, rootNodeIdx, nodesUsed);
-}
-
-//-------------------------- Traverse BVH ---------------------------
-
-void intersectBVH(
-    Ray& ray,
-    const std::vector<BVHNode>& bvh,
-    const std::vector<Triangle>& scene,
-    const std::vector<uint>& sceneIndices,
-    const uint nodeIdx,
-    uint& hitIndex,
-    uint& count) {
-  const BVHNode* node = &bvh[nodeIdx];
-  std::stack<const BVHNode*> stack;
-
-  while (1) {
-    // If leaf node, intersect with primitives
-    if (node->count > 0) {
-      for (uint i = 0; i < node->count; i++) {
-        float distance = intersect(ray, scene[sceneIndices[node->leftFirst + i]]);
-        if (distance < ray.t) {
-          ray.t = distance;
-          hitIndex = sceneIndices[node->leftFirst + i];
-        }
-      }
-
-      // If stack is empty, exit loop. Else grab next element on stack
-      if (stack.empty()) {
-        break;
-      } else {
-        node = stack.top();
-        stack.pop();
-      }
-      // Skip to the start of the loop
-      continue;
-    }
-
-    // Compare the distances to the two child nodes
-    const BVHNode* child1 = &bvh[node->leftFirst];
-    const BVHNode* child2 = &bvh[node->leftFirst + 1];
-    float dist1 = intersect(ray, child1->aabbMin, child1->aabbMax);
-    float dist2 = intersect(ray, child2->aabbMin, child2->aabbMax);
-
-    // Consider closer one first
-    if (dist1 > dist2) {
-      std::swap(dist1, dist2);
-      std::swap(child1, child2);
-    }
-
-    // If closer node is missed, the farther one is as well
-    if (dist1 == FLT_MAX) {
-      // Exit if stack empty or grab next element
-      if (stack.empty()) {
-        break;
-      } else {
-        node = stack.top();
-        stack.pop();
-      }
-    } else {
-      // If closer node is hit, consider it for the next loop
-      node = child1;
-      count++;
-
-      // If the farther node is hit, place it on the stack
-      if (dist2 != FLT_MAX) {
-        count++;
-        stack.push(child2);
-      }
-    }
-  }
-}
 
 //-------------------------- Render ---------------------------
 
@@ -305,25 +36,14 @@ vec3 getEnvironment(const vec3& direction) {
   return 0.5f * environment[idx];
 }
 
-vec3 getNormal(const Triangle& triangle) {
-  return normalize(cross(triangle.v0 - triangle.v1, triangle.v0 - triangle.v2));
-}
-
-const float metalness{0.0};
-const float roughness{0.01};
-const vec3 albedo{1};
-
 // Index of refraction for common dielectrics. Corresponds to F0 0.04
 const float IOR{1.5f};
 
 // Reflectance of the surface when looking straight at it along the negative normal
-vec3 F0 = mix(vec3(pow(IOR - 1.0f, 2.0f) / pow(IOR + 1.0f, 2.0f)), albedo, metalness);
+vec3 baseF0 = vec3(pow(IOR - 1.0f, 2.0f) / pow(IOR + 1.0f, 2.0f));
 
-vec3 getIllumination(Ray& ray,
-                     const std::vector<BVHNode>& bvh,
-                     const std::vector<Triangle>& scene,
-                     const std::vector<vec3>& normals,
-                     const std::vector<uint>& sceneIndices,
+vec3 getIllumination(Ray ray,
+                     const std::vector<Mesh>& scene,
                      uint& rngState,
                      int& bounceCount,
                      uint& testCount) {
@@ -332,15 +52,28 @@ vec3 getIllumination(Ray& ray,
   }
 
   vec3 col{0};
-  uint hitIndex{};
+  // intersectBVH(ray, bvh, primitives, sceneIndices, 0, hitIndex, testCount);
 
-  intersectBVH(ray, bvh, scene, sceneIndices, 0, hitIndex, testCount);
+  HitRecord closestHit{};
+  for (auto& mesh : scene) {
+    HitRecord hit = intersect(ray, mesh, testCount);
+    if (hit.ray.t < ray.t && closestHit.ray.t > hit.ray.t) {
+      closestHit = hit;  //{hit.hitIndex, hit.ray, hit.mesh};
+    }
+  }
 
+  ray.t = closestHit.ray.t;
   if (ray.t > 0.0f && ray.t < FLT_MAX) {
     vec3 p = ray.origin + ray.direction * ray.t;
-    vec3 N = normals[hitIndex];
-    p += 1e-4f * N;
+    vec3 N = normalize(vec3(closestHit.mesh->normalMatrix * vec4(closestHit.mesh->geometry.normals[closestHit.hitIndex], 0.0f)));
+
     vec3 V = -ray.direction;
+
+    const float metalness{closestHit.mesh->material.metalness};
+    const float roughness{closestHit.mesh->material.roughness};
+    const vec3 albedo{closestHit.mesh->material.albedo};
+
+    vec3 F0 = mix(baseF0, albedo, metalness);
 
     //--------------------- Diffuse ------------------------
     vec3 diffuse{0};
@@ -349,6 +82,7 @@ vec3 getIllumination(Ray& ray,
 
       vec3 sampleDir = importanceSampleCosine(Xi, N);
       Ray sampleRay{p, sampleDir, 1.0f / sampleDir, FLT_MAX};
+      sampleRay.origin += 1e-4f * sampleRay.direction;
 
       /*
           The discrete Riemann sum for the lighting equation is
@@ -356,7 +90,7 @@ vec3 getIllumination(Ray& ray,
           Lambertian BRDF is c/PI and the pdf for cosine sampling is dot(l, n)/PI
           PI term and dot products cancel out leaving just c * L(l)
       */
-      diffuse = albedo * getIllumination(sampleRay, bvh, scene, normals, sceneIndices, rngState, bounceCount, testCount);
+      diffuse = albedo * getIllumination(sampleRay, scene, rngState, bounceCount, testCount);
     }
 
     //--------------------- Specular ------------------------
@@ -393,7 +127,9 @@ vec3 getIllumination(Ray& ray,
     // Simplified from the above
 
     Ray sampleRay{p, sampleDir, 1.0f / sampleDir, FLT_MAX};
-    vec3 specular = (getIllumination(sampleRay, bvh, scene, normals, sceneIndices, rngState, bounceCount, testCount) * F * G * VdotH) / (NdotV * NdotH);
+    sampleRay.origin += 1e-4f * sampleRay.direction;
+
+    vec3 specular = (getIllumination(sampleRay, scene, rngState, bounceCount, testCount) * F * G * VdotH) / (NdotV * NdotH);
 
     // Combine diffuse and specular
     vec3 kD = (1.0f - F) * (1.0f - metalness);
@@ -427,10 +163,7 @@ mat3 viewMatrix(vec3 camera, vec3 at, vec3 up) {
 std::atomic<uint> atomicIdx{0u};
 
 void render(
-    const std::vector<Triangle>& scene,
-    const std::vector<vec3>& normals,
-    const std::vector<BVHNode>& bvh,
-    const std::vector<uint>& sceneIndices,
+    const std::vector<Mesh>& scene,
     const Camera& camera,
     Image& image,
     const vec2 threadInfo) {
@@ -451,20 +184,23 @@ void render(
 
     fragCoord = vec2{(float)(idx % image.width), std::floor((float)idx / image.width)};
 
+    vec3 col{0};
     for (uint s = 0u; s < samples; s++) {
       vec2 fC = fragCoord + 0.5f * (2.0f * getRandomVec2(rngState) - 1.0f);
       ray.direction = rayDirection(resolution, camera.fieldOfView, fC);
       ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
       ray.invDirection = 1.0f / ray.direction;
       ray.t = FLT_MAX;
+
       int bounces = 10;
       uint bvhTests = 0u;
-      image[idx] += getIllumination(ray, bvh, scene, normals, sceneIndices, rngState, bounces, bvhTests);
+      col += getIllumination(ray, scene, rngState, bounces, bvhTests);
     }
 
-    image[idx] /= samples;
-    image[idx] *= 1.0f - vec3{expf(-image[idx].r), expf(-image[idx].g), expf(-image[idx].b)};
-    image[idx] = pow(image[idx], vec3{1.0f / 2.2f});
+    col /= samples;
+    col *= 1.0f - vec3{expf(-col.r), expf(-col.g), expf(-col.b)};
+    col = pow(col, vec3{1.0f / 2.2f});
+    image[idx] = col;
   }
 }
 
@@ -482,63 +218,52 @@ int main() {
   }
 
   Camera camera{
-      .position = 140.0f * vec3{-1.0f, 0.3f, 0.8f},
+      .position = 140.0f * vec3{-0.8f, 0.2f, 1.4f},
       .target = vec3{0},
       .up = normalize(vec3{0, 1, 0}),
       .fieldOfView = 45.0f};
 
   // ----- Load model, generate normals and indices ----- //
 
+  std::vector<Geometry> geometryPool;
+  geometryPool.emplace_back(Geometry{loadModel("models/bust-of-menelaus.stl")});
+
+  std::vector<Mesh> scene;
+  scene.emplace_back(Mesh{geometryPool[0], Material{}});
+  scene[0].rotateX(-90.0f);
+  scene[0].rotateZ(50.0f);
+  scene[0].scale(1.25f);
+  scene[0].center();
+  scene[0].material.metalness = 1.0f;
+  scene[0].material.roughness = 0.2;
+  scene[0].material.albedo = vec3{1.0f, 0.8f, 0.6f};
+
+  scene.emplace_back(Mesh{geometryPool[0], Material{}});
+  scene[1].rotateX(-90.0f);
+  scene[1].scale(0.8f);
+  scene[1].center();
+  scene[1].translate(vec3(-80.0f, 0.0f, 0.0f));
+  scene[1].material.roughness = 0.01;
+  scene[1].material.albedo = vec3{1.0f, 0.1f, 0.1f};
+
+  scene.emplace_back(Mesh{geometryPool[0], Material{}});
+  scene[2].rotateX(-90.0f);
+  scene[2].scale(1.9f);
+  scene[2].center();
+  scene[2].translate(vec3(90.0f, 0.0f, 0.0f));
+  scene[2].material.albedo = vec3{1.0f};
+
+  // ----- Render geometry_ ----- //
+
   auto start{std::chrono::steady_clock::now()};
 
-  std::cout << "Load model...";
-  std::vector<Triangle> scene = loadModel("models/bust-of-menelaus.stl");
-
-  std::cout << "\rGenerate normals...";
-  std::vector<vec3> normals{scene.size()};
-  for (uint i = 0; i < scene.size(); i++) {
-    normals[i] = getNormal(scene[i]);
-  }
-
-  std::cout << "\rGenerate indices...";
-  std::vector<uint> sceneIndices(scene.size());
-  // Populate scene indices sequentially [0...N)
-  for (uint i = 0u; i < sceneIndices.size(); i++) {
-    sceneIndices[i] = i;
-  }
-
-  std::chrono::duration<double> elapsed_seconds{std::chrono::steady_clock::now() - start};
-  std::cout << "\rModel preparation time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
-  std::cout << "Triangles: " << scene.size() << std::endl;
-
-  // ----- Build BVH ----- //
-
-  // BVH tree with reserved space for 2N-1 nodes which is the maximum number of nodes in a binary tree with N leaves
-  std::vector<BVHNode> bvh{2 * scene.size() - 1};
-
-  uint rootNodeIdx = 0;
-  uint nodesUsed = 1;
-
-  start = std::chrono::steady_clock::now();
-  buildBVH(bvh, scene, sceneIndices, rootNodeIdx, nodesUsed);
-  elapsed_seconds = std::chrono::steady_clock::now() - start;
-  std::cout << "BVH build time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
-  std::cout << "Nodes: " << nodesUsed << std::endl;
-
-  // ----- Render scene ----- //
-
-  start = std::chrono::steady_clock::now();
-
-  uint numThreads{8};
+  uint numThreads{10};
   std::vector<std::thread> threads;
 
   // Launch threads
   for (uint i = 0u; i < numThreads; i++) {
     threads.push_back(std::thread(render,
                                   std::ref(scene),
-                                  std::ref(normals),
-                                  std::ref(bvh),
-                                  std::ref(sceneIndices),
                                   std::ref(camera),
                                   std::ref(image),
                                   vec2{i, numThreads}));
@@ -549,7 +274,7 @@ int main() {
     t.join();
   }
 
-  elapsed_seconds = std::chrono::steady_clock::now() - start;
+  std::chrono::duration<double> elapsed_seconds{std::chrono::steady_clock::now() - start};
   std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
   // ----- Output ----- //
