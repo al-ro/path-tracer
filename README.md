@@ -20,8 +20,24 @@ Environment map from [HDR Haven](https://hdri-haven.com/)
 - Lambertian diffuse
 - BRDF importance sampling
 
+## Use
+
+- make clean (to remove old executable)
+- make build
+- make run (with default settings)
+- make all (clean, build, run)
+- ./PathTracer \[options\]
+    - *-w* width of rendered image (e.g. -w 512)
+    - *-h* height of rendered image
+    - *-s* samples per pixel
+    - *-b* maximum bounces per ray per sample
+    - *-a* output BVH heatmap (ignores -s and -b)
+
+
 ## Dependencies
 
 - [GLM](https://github.com/g-truc/glm) for maths functions and data structures
-- [stb](https://github.com/nothings/stb) for reading and writing images
-- [stl_reader.h](https://github.com/sreiter/stl_reader) for reading STL files
+- [stb](https://github.com/nothings/stb) for reading and writing images (included in /lib)
+- [stl_reader.h](https://github.com/sreiter/stl_reader) for reading STL files (included in /lib)
+- C++17
+- make (optional)
