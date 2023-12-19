@@ -1,3 +1,5 @@
+#include <getopt.h>
+
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -19,6 +21,22 @@ using namespace glm;
 
 #define INV2PI (1.0f / (2.0f * M_PI))
 #define INVPI (1.0f / M_PI)
+
+/*
+  TODO:
+    TLAS
+    HitRecord
+    Vertex attributes
+    Materials with textures
+    Normal mapping
+
+    CUDA
+
+    Transmission
+    Alpha texture
+    Emission
+    Lights
+*/
 
 //-------------------------- Render ---------------------------
 
@@ -166,11 +184,12 @@ void render(
     const std::vector<Mesh>& scene,
     const Camera& camera,
     Image& image,
-    const vec2 threadInfo) {
+    const uint samples,
+    int maxBounces,
+    const uint threadId) {
   Ray ray{.origin = camera.position};
   vec2 fragCoord{};
 
-  const uint samples = 32;
   uint rngState{1031};
 
   vec2 resolution{image.width, image.height};
@@ -178,7 +197,7 @@ void render(
   for (auto idx = atomicIdx.fetch_add(1, std::memory_order_relaxed);
        idx < image.data.size();
        idx = atomicIdx.fetch_add(1, std::memory_order_relaxed)) {
-    if (threadInfo.x < 1) {
+    if (threadId < 1) {
       std::cout << "\r" << int(101.f * (float)idx / image.data.size()) << "%";
     }
 
@@ -192,7 +211,7 @@ void render(
       ray.invDirection = 1.0f / ray.direction;
       ray.t = FLT_MAX;
 
-      int bounces = 10;
+      int bounces = maxBounces;
       uint bvhTests = 0u;
       col += getIllumination(ray, scene, rngState, bounces, bvhTests);
     }
@@ -204,9 +223,42 @@ void render(
   }
 }
 
-int main() {
-  const uint width{750};
-  const uint height{400};
+int main(int argc, char** argv) {
+  uint width{750};
+  uint height{400};
+  uint samples{32};
+  uint bounces{10};
+
+  for (;;) {
+    switch (getopt(argc, argv, "w:h:s:b:"))  // note the colon (:) to indicate that 'b' has a parameter and is not a switch
+    {
+      case 'w':
+        width = atoi(optarg);
+        continue;
+
+      case 'h':
+        height = atoi(optarg);
+        continue;
+
+      case 's':
+        samples = atoi(optarg);
+
+      case 'b':
+        bounces = atoi(optarg);
+        continue;
+
+      default:
+        std::cout << "To specify width, height, samples and bounces use -w 750 -h 400 -s 32 -b 10" << std::endl;
+        break;
+
+      case -1:
+        break;
+    }
+
+    break;
+  }
+
+  std::cout << "Dimensions: [" << width << ", " << height << "]\tSamples: " << samples << "\tBounces: " << bounces << std::endl;
 
   const vec2 resolution{width, height};
 
@@ -266,7 +318,7 @@ int main() {
                                   std::ref(scene),
                                   std::ref(camera),
                                   std::ref(image),
-                                  vec2{i, numThreads}));
+                                  samples, bounces, i));
   }
 
   // Wait for all threads to finish

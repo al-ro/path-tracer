@@ -1,13 +1,14 @@
 CFLAGS = -std=c++17 -O3
 
-PathTracer: main.cpp
-	
+build:
 	g++ $(CFLAGS) -o PathTracer *.cpp
 
-.PHONY: run clean
+.PHONY: run
 
-run: PathTracer
+run:
 	./PathTracer
 
 clean:
-	rm -f PathTracer
+	rm PathTracer
+
+all: clean build run
