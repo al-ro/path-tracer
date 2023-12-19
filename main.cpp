@@ -1,5 +1,6 @@
 #include <getopt.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -21,6 +22,11 @@ using namespace glm;
 
 #define INV2PI (1.0f / (2.0f * M_PI))
 #define INVPI (1.0f / M_PI)
+
+Image environment = loadEnvironmentImage("environment/evening_road_01_puresky_2k.hdr");
+
+// Atomically incremented index to control which threads works on which pixel
+std::atomic<uint> atomicIdx{0u};
 
 /*
   TODO:
@@ -44,8 +50,6 @@ float dot_c(const vec3& a, const vec3& b) {
   return max(dot(a, b), 1e-5f);
 }
 
-Image environment = loadEnvironmentImage("environment/evening_road_01_puresky_2k.hdr");
-
 vec3 getEnvironment(const vec3& direction) {
   uint u = environment.width * atan2f(direction.z, direction.x) * INV2PI - 0.5f;
   uint v = environment.height * acosf(direction.y) * INVPI - 0.5f;
@@ -53,12 +57,6 @@ vec3 getEnvironment(const vec3& direction) {
 
   return 0.5f * environment[idx];
 }
-
-// Index of refraction for common dielectrics. Corresponds to F0 0.04
-const float IOR{1.5f};
-
-// Reflectance of the surface when looking straight at it along the negative normal
-vec3 baseF0 = vec3(pow(IOR - 1.0f, 2.0f) / pow(IOR + 1.0f, 2.0f));
 
 vec3 getIllumination(Ray ray,
                      const std::vector<Mesh>& scene,
@@ -91,7 +89,7 @@ vec3 getIllumination(Ray ray,
     const float roughness{closestHit.mesh->material.roughness};
     const vec3 albedo{closestHit.mesh->material.albedo};
 
-    vec3 F0 = mix(baseF0, albedo, metalness);
+    vec3 F0 = mix(closestHit.mesh->material.F0, albedo, metalness);
 
     //--------------------- Diffuse ------------------------
     vec3 diffuse{0};
@@ -177,15 +175,13 @@ mat3 viewMatrix(vec3 camera, vec3 at, vec3 up) {
   return mat3(xaxis, yaxis, -zaxis);
 }
 
-// Atomically incremented index to control which threads works on which pixel
-std::atomic<uint> atomicIdx{0u};
-
 void render(
     const std::vector<Mesh>& scene,
     const Camera& camera,
     Image& image,
     const uint samples,
     int maxBounces,
+    bool renderBVH,
     const uint threadId) {
   Ray ray{.origin = camera.position};
   vec2 fragCoord{};
@@ -204,22 +200,34 @@ void render(
     fragCoord = vec2{(float)(idx % image.width), std::floor((float)idx / image.width)};
 
     vec3 col{0};
-    for (uint s = 0u; s < samples; s++) {
-      vec2 fC = fragCoord + 0.5f * (2.0f * getRandomVec2(rngState) - 1.0f);
+    for (uint s = 0u; s < (renderBVH ? 1u : samples); s++) {
+      vec2 fC = fragCoord;
+      if (!renderBVH) {
+        fC += 0.5f * (2.0f * getRandomVec2(rngState) - 1.0f);
+      }
       ray.direction = rayDirection(resolution, camera.fieldOfView, fC);
       ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
       ray.invDirection = 1.0f / ray.direction;
       ray.t = FLT_MAX;
 
-      int bounces = maxBounces;
       uint bvhTests = 0u;
-      col += getIllumination(ray, scene, rngState, bounces, bvhTests);
+      if (renderBVH) {
+        HitRecord closestHit{};
+        for (auto& mesh : scene) {
+          HitRecord hit = intersect(ray, mesh, bvhTests);
+        }
+        image[idx] = vec3(bvhTests);
+      } else {
+        int bounces = maxBounces;
+        col += getIllumination(ray, scene, rngState, bounces, bvhTests);
+      }
     }
-
-    col /= samples;
-    col *= 1.0f - vec3{expf(-col.r), expf(-col.g), expf(-col.b)};
-    col = pow(col, vec3{1.0f / 2.2f});
-    image[idx] = col;
+    if (!renderBVH) {
+      col /= samples;
+      col *= 1.0f - vec3{expf(-col.r), expf(-col.g), expf(-col.b)};
+      col = pow(col, vec3{1.0f / 2.2f});
+      image[idx] = col;
+    }
   }
 }
 
@@ -228,10 +236,10 @@ int main(int argc, char** argv) {
   uint height{400};
   uint samples{32};
   uint bounces{10};
+  bool renderBVH{false};
 
   for (;;) {
-    switch (getopt(argc, argv, "w:h:s:b:"))  // note the colon (:) to indicate that 'b' has a parameter and is not a switch
-    {
+    switch (getopt(argc, argv, "w:h:s:b:a")) {
       case 'w':
         width = atoi(optarg);
         continue;
@@ -242,13 +250,17 @@ int main(int argc, char** argv) {
 
       case 's':
         samples = atoi(optarg);
+        continue;
 
       case 'b':
         bounces = atoi(optarg);
         continue;
+      case 'a':
+        renderBVH = true;
+        continue;
 
       default:
-        std::cout << "To specify width, height, samples and bounces use -w 750 -h 400 -s 32 -b 10" << std::endl;
+        std::cout << "To specify width, height, samples and bounces use e.g. -w 750 -h 400 -s 32 -b 10\nUse -a to view BVH heat map" << std::endl;
         break;
 
       case -1:
@@ -318,7 +330,7 @@ int main(int argc, char** argv) {
                                   std::ref(scene),
                                   std::ref(camera),
                                   std::ref(image),
-                                  samples, bounces, i));
+                                  samples, bounces, renderBVH, i));
   }
 
   // Wait for all threads to finish
@@ -330,6 +342,20 @@ int main(int argc, char** argv) {
   std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
   // ----- Output ----- //
+
+  if (renderBVH) {
+    vec3 maxElement = *std::max_element(image.data.begin(), image.data.end(), [](vec3& a, vec3& b) { return a.x < b.x; });
+    std::cout << "Maximum BVH tests: " << maxElement.x << std::endl;
+
+    vec3 lowCol = pow(vec3{0}, vec3(2.2));
+    vec3 highCol = pow(vec3{1}, vec3(2.2));
+    for (auto& p : image.data) {
+      if (p.x > 0.0f) {
+        p = mix(lowCol, highCol, 0.0f + (p.x - 1.0f) * (1.0f - 0.0f) / (maxElement.x - 1.0f));
+        p = pow(p, vec3(0.4545));
+      }
+    }
+  }
 
   outputToFile(image);
 

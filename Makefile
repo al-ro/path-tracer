@@ -9,6 +9,6 @@ run:
 	./PathTracer
 
 clean:
-	rm PathTracer
+	rm -f PathTracer
 
 all: clean build run
