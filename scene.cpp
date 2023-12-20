@@ -35,6 +35,6 @@ void Scene::generateIndices() {
   }
 }
 
-HitRecord Scene::intersect(const Ray& ray, uint& count) const {
+HitRecord Scene::intersect(Ray& ray, uint& count) const {
   return intersectTLAS(ray, tlas, meshes, indices, count);
 }

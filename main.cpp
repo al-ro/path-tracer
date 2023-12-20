@@ -291,7 +291,7 @@ int main(int argc, char** argv) {
   }
 
   Camera camera{
-      .position = 140.0f * vec3{-0.8f, 0.2f, 1.4f},
+      .position = 400.0f * vec3{-0.8f, 0.2f, 1.4f},
       .target = vec3{0},
       .up = normalize(vec3{0, 1, 0}),
       .fieldOfView = 45.0f};
@@ -302,29 +302,20 @@ int main(int argc, char** argv) {
   geometryPool.emplace_back(Geometry{loadModel("models/bust-of-menelaus.stl")});
 
   std::vector<Mesh> meshes;
-  meshes.emplace_back(Mesh{geometryPool[0], Material{}});
-  meshes[0].rotateX(-90.0f);
-  meshes[0].rotateZ(50.0f);
-  meshes[0].scale(1.25f);
-  meshes[0].center();
-  meshes[0].material.metalness = 1.0f;
-  meshes[0].material.roughness = 0.2;
-  meshes[0].material.albedo = vec3{1.0f, 0.8f, 0.6f};
 
-  meshes.emplace_back(Mesh{geometryPool[0], Material{}});
-  meshes[1].rotateX(-90.0f);
-  meshes[1].scale(0.8f);
-  meshes[1].center();
-  meshes[1].translate(vec3(-80.0f, 0.0f, 0.0f));
-  meshes[1].material.roughness = 0.01;
-  meshes[1].material.albedo = vec3{1.0f, 0.1f, 0.1f};
+  uint rngState{7142u};
 
-  meshes.emplace_back(Mesh{geometryPool[0], Material{}});
-  meshes[2].rotateX(-90.0f);
-  meshes[2].scale(1.9f);
-  meshes[2].center();
-  meshes[2].translate(vec3(90.0f, 0.0f, 0.0f));
-  meshes[2].material.albedo = vec3{1.0f};
+  for (uint i = 0u; i < 100u; i++) {
+    meshes.emplace_back(Mesh{geometryPool[0], Material{.albedo = mix(vec3{1}, getRandomVec3(rngState), 0.5),
+                                                       .metalness = (getRandomFloat(rngState) > 0.65f ? 1.0f : 0.0f)}});
+    meshes[i].rotateX(-M_PI);
+    meshes[i].rotateZ(2.0f * M_PI * getRandomFloat(rngState));
+    meshes[i].rotateY(2.0f * M_PI * getRandomFloat(rngState));
+    meshes[i].scale(getRandomFloat(rngState));
+    meshes[i].center();
+
+    meshes[i].translate(400.0f * (2.0f * getRandomVec3(rngState) - 1.0f));
+  }
 
   Scene scene(std::move(meshes));
 

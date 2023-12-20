@@ -127,7 +127,7 @@ void intersectBVH(
   }
 }
 
-HitRecord intersectTLAS(const Ray& ray,
+HitRecord intersectTLAS(Ray& ray,
                         const std::vector<TLASNode>& tlas,
                         const std::vector<Mesh>& scene,
                         const std::vector<uint>& indices,
@@ -143,6 +143,7 @@ HitRecord intersectTLAS(const Ray& ray,
         idx = indices[node->leftChild + i];
         HitRecord hit = scene[idx].intersect(ray, count);
         if (hit.dist < closestHit.dist) {
+          ray.t = hit.dist;
           closestHit = hit;
           closestHit.hitIndex = idx;
         }

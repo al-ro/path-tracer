@@ -35,6 +35,7 @@ Resulting image is output as *output.bmp*
     - *-h* height of rendered image
     - *-s* samples per pixel
     - *-b* maximum bounces per ray per sample
+    - *-t* number of threads
     - *-a* output BVH heatmap (ignores -s and -b)
 
 

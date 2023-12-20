@@ -48,17 +48,17 @@ void Mesh::translate(vec3 t) {
 }
 
 void Mesh::rotateX(float angle) {
-  modelMatrix = rotate(modelMatrix, radians(angle), vec3(1, 0, 0));
+  modelMatrix = rotate(modelMatrix, angle, vec3(1, 0, 0));
   update();
 }
 
 void Mesh::rotateY(float angle) {
-  modelMatrix = rotate(modelMatrix, radians(angle), vec3(0, 1, 0));
+  modelMatrix = rotate(modelMatrix, angle, vec3(0, 1, 0));
   update();
 }
 
 void Mesh::rotateZ(float angle) {
-  modelMatrix = rotate(modelMatrix, radians(angle), vec3(0, 0, 1));
+  modelMatrix = rotate(modelMatrix, angle, vec3(0, 0, 1));
   update();
 }
 
