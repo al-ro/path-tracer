@@ -19,10 +19,16 @@ class Mesh {
   Material material;
   // Translation, rotation, scale
   mat4 modelMatrix = identity<mat4>();
+
   // Inverse of the model matrix to transform rays
   mat4 invModelMatrix = identity<mat4>();
+
   mat4 normalMatrix = transpose(invModelMatrix);
-  AABB transformedAABB{};
+
+  // Transformed limits for constructing TLAS
+  vec3 transformedAABBMin{FLT_MAX};
+  vec3 transformedAABBMax{-FLT_MAX};
+  vec3 transformedCentroid{0};
 
   Mesh() = delete;
   Mesh(const Geometry&, Material);
@@ -36,6 +42,10 @@ class Mesh {
   void rotateZ(float angle);
   void scale(float scale);
   void update();
+
+  // Find the distance to the closest intersection, the index of the primitive and the number of BVH tests.
+  // Primitive index and distance to hit is packed into HitRecord (FLT_MAX if no intersection)
+  HitRecord intersect(const Ray& ray, uint& count) const;
 
   // Center geometry at the origin
   void center();

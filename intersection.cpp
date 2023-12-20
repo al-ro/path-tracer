@@ -127,18 +127,69 @@ void intersectBVH(
   }
 }
 
-HitRecord intersect(Ray& ray, const Mesh& mesh, uint& count) {
-  Ray transformedRay = ray;
-  transformedRay.origin = mesh.invModelMatrix * vec4(ray.origin, 1.0f);
-  transformedRay.direction = mesh.invModelMatrix * vec4(ray.direction, 0.0f);
-  transformedRay.invDirection = 1.0f / transformedRay.direction;
+HitRecord intersectTLAS(const Ray& ray,
+                        const std::vector<TLASNode>& tlas,
+                        const std::vector<Mesh>& scene,
+                        const std::vector<uint>& indices,
+                        uint& count) {
+  const TLASNode* node = &tlas[0];
+  std::stack<const TLASNode*> stack{};
+  HitRecord closestHit{};
+  uint idx{};
 
-  uint hitIndex{UINT32_MAX};
+  while (1) {
+    if (node->count > 0u) {
+      for (uint i = 0; i < node->count; i++) {
+        idx = indices[node->leftChild + i];
+        HitRecord hit = scene[idx].intersect(ray, count);
+        if (hit.dist < closestHit.dist) {
+          closestHit = hit;
+          closestHit.hitIndex = idx;
+        }
+      }
+      // If stack is empty, exit loop. Else grab next element on stack
+      if (stack.empty()) {
+        break;
+      } else {
+        node = stack.top();
+        stack.pop();
+      }
+      // Skip to the start of the loop
+      continue;
+    }
 
-  intersectBVH(transformedRay,
-               mesh.geometry.bvh,
-               mesh.geometry.primitives,
-               mesh.geometry.indices,
-               0, hitIndex, count);
-  return HitRecord{hitIndex, {ray.origin, ray.direction, ray.invDirection, transformedRay.t}, &mesh};
+    // Compare the distances to the two child nodes
+    const TLASNode* child1 = &tlas[node->leftChild];
+    const TLASNode* child2 = &tlas[node->leftChild + 1];
+    float dist1 = intersect(ray, child1->aabbMin, child1->aabbMax);
+    float dist2 = intersect(ray, child2->aabbMin, child2->aabbMax);
+
+    // Consider closer one first
+    if (dist1 > dist2) {
+      std::swap(dist1, dist2);
+      std::swap(child1, child2);
+    }
+
+    // If closer node is missed, the farther one is as well
+    if (dist1 == FLT_MAX) {
+      // Exit if stack empty or grab next element
+      if (stack.empty()) {
+        break;
+      } else {
+        node = stack.top();
+        stack.pop();
+      }
+    } else {
+      // If closer node is hit, consider it for the next loop
+      node = child1;
+      count++;
+
+      // If the farther node is hit, place it on the stack
+      if (dist2 != FLT_MAX) {
+        count++;
+        stack.push(child2);
+      }
+    }
+  }
+  return closestHit;
 }

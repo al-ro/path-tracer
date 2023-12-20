@@ -6,11 +6,44 @@ Mesh::Mesh(const Geometry& geometry, Material material) : geometry{geometry}, ma
   update();
 }
 
+HitRecord Mesh::intersect(const Ray& ray, uint& count) const {
+  Ray transformedRay = ray;
+  transformedRay.origin = invModelMatrix * vec4(ray.origin, 1.0f);
+  // Not normalized to handle scale transform
+  transformedRay.direction = invModelMatrix * vec4(ray.direction, 0.0f);
+  transformedRay.invDirection = 1.0f / transformedRay.direction;
+
+  uint hitIndex{UINT_MAX};
+
+  // Hit distance is recorded in .t of the ray passed in
+  geometry.intersect(transformedRay, hitIndex, count);
+
+  vec3 normal{0};
+
+  if (hitIndex < UINT_MAX) {
+    normal = geometry.normals[hitIndex];
+  }
+
+  return HitRecord{hitIndex, transformedRay.t, normal};
+}
+
 void Mesh::update() {
   invModelMatrix = inverse(modelMatrix);
   normalMatrix = transpose(invModelMatrix);
-  transformedAABB.min = modelMatrix * vec4(geometry.bvh[0].aabbMin, 1.0f);
-  transformedAABB.max = modelMatrix * vec4(geometry.bvh[0].aabbMax, 1.0f);
+
+  vec3 aabbMin = modelMatrix * vec4(geometry.aabbMin, 1.0f);
+  vec3 aabbMax = modelMatrix * vec4(geometry.aabbMax, 1.0f);
+
+  transformedAABBMin = vec3{FLT_MAX};
+  transformedAABBMax = vec3{-FLT_MAX};
+
+  transformedAABBMin = min(transformedAABBMin, aabbMin);
+  transformedAABBMin = min(transformedAABBMin, aabbMax);
+
+  transformedAABBMax = max(transformedAABBMax, aabbMin);
+  transformedAABBMax = max(transformedAABBMax, aabbMax);
+
+  transformedCentroid = transformedAABBMin + 0.5f * (transformedAABBMax - transformedAABBMin);
 }
 
 void Mesh::translate(vec3 t) {
@@ -39,6 +72,6 @@ void Mesh::scale(float scale) {
 }
 
 void Mesh::center() {
-  modelMatrix = glm::translate(modelMatrix, -geometry.center);
+  modelMatrix = glm::translate(modelMatrix, -geometry.centroid);
   update();
 }

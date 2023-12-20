@@ -17,6 +17,8 @@
 #include "mesh.hpp"
 #include "output.hpp"
 #include "random.hpp"
+#include "scene.hpp"
+#include "tlas.hpp"
 
 using namespace glm;
 
@@ -59,7 +61,7 @@ vec3 getEnvironment(const vec3& direction) {
 }
 
 vec3 getIllumination(Ray ray,
-                     const std::vector<Mesh>& scene,
+                     const Scene& scene,
                      uint& rngState,
                      int& bounceCount,
                      uint& testCount) {
@@ -68,28 +70,24 @@ vec3 getIllumination(Ray ray,
   }
 
   vec3 col{0};
-  // intersectBVH(ray, bvh, primitives, sceneIndices, 0, hitIndex, testCount);
 
-  HitRecord closestHit{};
-  for (auto& mesh : scene) {
-    HitRecord hit = intersect(ray, mesh, testCount);
-    if (hit.ray.t < ray.t && closestHit.ray.t > hit.ray.t) {
-      closestHit = hit;
-    }
-  }
+  HitRecord closestHit = scene.intersect(ray, testCount);
 
-  ray.t = closestHit.ray.t;
-  if (ray.t > 0.0f && ray.t < FLT_MAX) {
+  ray.t = closestHit.dist;
+
+  if (ray.t < FLT_MAX) {
+    const Mesh& mesh{scene.meshes[closestHit.hitIndex]};
+
     vec3 p = ray.origin + ray.direction * ray.t;
-    vec3 N = normalize(vec3(closestHit.mesh->normalMatrix * vec4(closestHit.mesh->geometry.normals[closestHit.hitIndex], 0.0f)));
+    vec3 N = normalize(vec3(mesh.normalMatrix * vec4(closestHit.normal, 0.0f)));
 
     vec3 V = -ray.direction;
 
-    const float metalness{closestHit.mesh->material.metalness};
-    const float roughness{closestHit.mesh->material.roughness};
-    const vec3 albedo{closestHit.mesh->material.albedo};
+    const float metalness{mesh.material.metalness};
+    const float roughness{mesh.material.roughness};
+    const vec3 albedo{mesh.material.albedo};
 
-    vec3 F0 = mix(closestHit.mesh->material.F0, albedo, metalness);
+    vec3 F0 = mix(mesh.material.F0, albedo, metalness);
 
     //--------------------- Diffuse ------------------------
     vec3 diffuse{0};
@@ -176,7 +174,7 @@ mat3 viewMatrix(vec3 camera, vec3 at, vec3 up) {
 }
 
 void render(
-    const std::vector<Mesh>& scene,
+    const Scene& scene,
     const Camera& camera,
     Image& image,
     const uint samples,
@@ -188,14 +186,15 @@ void render(
 
   uint rngState{1031};
 
-  vec2 resolution{image.width, image.height};
+  const vec2 resolution{image.width, image.height};
+  const float inverseSize = 1.0f / image.data.size();
 
   for (auto idx = atomicIdx.fetch_add(1, std::memory_order_relaxed);
        idx < image.data.size();
        idx = atomicIdx.fetch_add(1, std::memory_order_relaxed)) {
     if (threadId < 1) {
       // First thread outputs progress
-      std::cout << "\r" << int(101.f * (float)idx / image.data.size()) << "%";
+      std::cout << "\r" << int(101.0f * (float)idx * inverseSize) << "%";
     }
 
     fragCoord = vec2{(float)(idx % image.width), std::floor((float)idx / image.width)};
@@ -215,9 +214,7 @@ void render(
       uint bvhTests = 0u;
       if (renderBVH) {
         // Get number of BVH tests for primary ray
-        for (auto& mesh : scene) {
-          intersect(ray, mesh, bvhTests);
-        }
+        scene.intersect(ray, bvhTests);
         image[idx] = vec3(bvhTests);
       } else {
         // Path trace scene
@@ -244,11 +241,12 @@ int main(int argc, char** argv) {
   uint height{400};
   uint samples{32};
   uint bounces{10};
+  uint numThreads{10};
   bool renderBVH{false};
 
   // Parse command line arguments
   for (uint i = 0u; i < argc; i++) {
-    switch (getopt(argc, argv, "w:h:s:b:a")) {
+    switch (getopt(argc, argv, "w:h:s:b:t:at:")) {
       case 'w':
         width = atoi(optarg);
         continue;
@@ -264,22 +262,26 @@ int main(int argc, char** argv) {
       case 'b':
         bounces = atoi(optarg);
         continue;
+
+      case 't':
+        numThreads = atoi(optarg);
+        continue;
+
       case 'a':
         renderBVH = true;
         continue;
 
       default:
-        std::cout << "To specify width, height, samples and bounces use e.g. -w 750 -h 400 -s 32 -b 10\nUse -a to view BVH heat map\n";
-        break;
-
-      case -1:
+        std::cout << "Specify -w width, -h height, -s samples, -t threads or -b bounces\n";
+        std::cout << "Use -a to render BVH heat map (only main ray, single sample, no jitter)\n";
         break;
     }
 
     break;
   }
 
-  std::cout << "Dimensions: [" << width << ", " << height << "]\tSamples: " << samples << "\tBounces: " << bounces << std::endl;
+  std::cout << "Dimensions: [" << width << ", " << height << "]\tSamples: " << samples
+            << "\tBounces: " << bounces << "\tThreads: " << numThreads << std::endl;
 
   Image image{width, height};
 
@@ -299,45 +301,46 @@ int main(int argc, char** argv) {
   std::vector<Geometry> geometryPool;
   geometryPool.emplace_back(Geometry{loadModel("models/bust-of-menelaus.stl")});
 
-  std::vector<Mesh> scene;
-  scene.emplace_back(Mesh{geometryPool[0], Material{}});
-  scene[0].rotateX(-90.0f);
-  scene[0].rotateZ(50.0f);
-  scene[0].scale(1.25f);
-  scene[0].center();
-  scene[0].material.metalness = 1.0f;
-  scene[0].material.roughness = 0.2;
-  scene[0].material.albedo = vec3{1.0f, 0.8f, 0.6f};
+  std::vector<Mesh> meshes;
+  meshes.emplace_back(Mesh{geometryPool[0], Material{}});
+  meshes[0].rotateX(-90.0f);
+  meshes[0].rotateZ(50.0f);
+  meshes[0].scale(1.25f);
+  meshes[0].center();
+  meshes[0].material.metalness = 1.0f;
+  meshes[0].material.roughness = 0.2;
+  meshes[0].material.albedo = vec3{1.0f, 0.8f, 0.6f};
 
-  scene.emplace_back(Mesh{geometryPool[0], Material{}});
-  scene[1].rotateX(-90.0f);
-  scene[1].scale(0.8f);
-  scene[1].center();
-  scene[1].translate(vec3(-80.0f, 0.0f, 0.0f));
-  scene[1].material.roughness = 0.01;
-  scene[1].material.albedo = vec3{1.0f, 0.1f, 0.1f};
+  meshes.emplace_back(Mesh{geometryPool[0], Material{}});
+  meshes[1].rotateX(-90.0f);
+  meshes[1].scale(0.8f);
+  meshes[1].center();
+  meshes[1].translate(vec3(-80.0f, 0.0f, 0.0f));
+  meshes[1].material.roughness = 0.01;
+  meshes[1].material.albedo = vec3{1.0f, 0.1f, 0.1f};
 
-  scene.emplace_back(Mesh{geometryPool[0], Material{}});
-  scene[2].rotateX(-90.0f);
-  scene[2].scale(1.9f);
-  scene[2].center();
-  scene[2].translate(vec3(90.0f, 0.0f, 0.0f));
-  scene[2].material.albedo = vec3{1.0f};
+  meshes.emplace_back(Mesh{geometryPool[0], Material{}});
+  meshes[2].rotateX(-90.0f);
+  meshes[2].scale(1.9f);
+  meshes[2].center();
+  meshes[2].translate(vec3(90.0f, 0.0f, 0.0f));
+  meshes[2].material.albedo = vec3{1.0f};
+
+  Scene scene(std::move(meshes));
 
   // ----- Render geometry_ ----- //
 
   auto start{std::chrono::steady_clock::now()};
 
-  uint numThreads{10};
-  std::vector<std::thread> threads;
+  std::vector<std::thread> threads(numThreads);
 
   // Launch threads
   for (uint i = 0u; i < numThreads; i++) {
-    threads.push_back(std::thread(render,
-                                  std::ref(scene),
-                                  std::ref(camera),
-                                  std::ref(image),
-                                  samples, bounces, renderBVH, i));
+    threads[i] = std::thread(render,
+                             std::ref(scene),
+                             std::ref(camera),
+                             std::ref(image),
+                             samples, bounces, renderBVH, i);
   }
 
   // Wait for all threads to finish
@@ -345,7 +348,7 @@ int main(int argc, char** argv) {
     t.join();
   }
 
-  std::chrono::duration<double> elapsed_seconds{std::chrono::steady_clock::now() - start};
+  std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - start;
   std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
   // ----- Output ----- //
@@ -354,11 +357,13 @@ int main(int argc, char** argv) {
     vec3 maxElement = *std::max_element(image.data.begin(), image.data.end(), [](vec3& a, vec3& b) { return a.x < b.x; });
     std::cout << "Maximum BVH tests: " << maxElement.x << std::endl;
 
+    float inverseMaxElement = 1.0f / maxElement.x;
+
     vec3 lowCol = pow(vec3{0}, vec3(2.2));
     vec3 highCol = pow(vec3{1}, vec3(2.2));
-    for (auto& p : image.data) {
+    for (vec3& p : image.data) {
       if (p.x > 0.0f) {
-        p = mix(lowCol, highCol, 0.0f + (p.x - 1.0f) * (1.0f - 0.0f) / (maxElement.x - 1.0f));
+        p = mix(lowCol, highCol, p.x * inverseMaxElement);
         p = pow(p, vec3(0.4545));
       }
     }

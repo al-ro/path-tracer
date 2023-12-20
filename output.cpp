@@ -22,5 +22,7 @@ void outputToFile(const Image& image) {
     }
   }
 
-  stbi_write_bmp("output.bmp", image.width, image.height, 3, bmpData.data());
+  std::string outputName = "output.bmp";
+  stbi_write_bmp(outputName.c_str(), image.width, image.height, 3, bmpData.data());
+  std::cout << "Output result to " << outputName << std::endl;
 }

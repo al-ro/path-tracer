@@ -1,5 +1,4 @@
 #include "dataTypes.hpp"
-#include "hitRecord.hpp"
 #include "mesh.hpp"
 
 float intersect(const Ray& ray, const Triangle& triangle);
@@ -14,3 +13,9 @@ void intersectBVH(Ray& ray,
                   const uint nodeIdx,
                   uint& hitIndex,
                   uint& count);
+
+HitRecord intersectTLAS(const Ray& ray,
+                        const std::vector<TLASNode>& tlas,
+                        const std::vector<Mesh>& scene,
+                        const std::vector<uint>& indices,
+                        uint& count);

@@ -15,7 +15,9 @@ Geometry::Geometry(std::vector<Triangle> primitives) : primitives{primitives},
   generateNormals();
   generateBVH();
 
-  center = bvh[0].aabbMin + 0.5f * (bvh[0].aabbMax - bvh[0].aabbMin);
+  aabbMin = bvh[0].aabbMin;
+  aabbMax = bvh[0].aabbMax;
+  centroid = bvh[0].aabbMin + 0.5f * (bvh[0].aabbMax - bvh[0].aabbMin);
 }
 
 void Geometry::generateBVH() {
@@ -57,6 +59,6 @@ void Geometry::generateNormals() {
   }
 }
 
-void Geometry::intersect(Ray& ray, uint& index, uint& count) {
+void Geometry::intersect(Ray& ray, uint& index, uint& count) const {
   return intersectBVH(ray, bvh, primitives, indices, 0, index, count);
 }

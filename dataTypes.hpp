@@ -36,7 +36,7 @@ struct AABB {
     max = glm::max(max, b.max);
   }
 
-  // Return surface are 2xy * 2xz * 2yz
+  // Return surface area 2xy * 2xz * 2yz
   inline float area() {
     vec3 dim = max - min;
     return 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);
@@ -61,6 +61,15 @@ struct BVHNode {
   uint count;
 };
 
+struct TLASNode {
+  vec3 aabbMin;
+  vec3 aabbMax;
+  // Index of first Mesh or left child
+  uint leftChild;
+  // Number of Mesh objects
+  uint count;
+};
+
 // The extent of the primitives in a BVH construction interval and the number of primitives in it
 struct Bin {
   AABB bounds{};
@@ -74,6 +83,12 @@ struct Ray {
   vec3 invDirection{};
   // Distance along ray where an intersection occurs
   float t{FLT_MAX};
+};
+
+struct HitRecord {
+  uint hitIndex{UINT_MAX};
+  float dist{FLT_MAX};
+  vec3 normal{0};
 };
 
 struct Camera {
@@ -97,6 +112,14 @@ struct Image {
     return data[i];
   }
 };
+
+inline std::ostream& operator<<(std::ostream& os, const vec3& v) {
+  for (uint i = 0; i < 3; i++) {
+    os << v[i] << " ";
+  }
+
+  return os;
+}
 
 inline std::ostream& operator<<(std::ostream& os, const mat4x4& m) {
   for (uint i = 0; i < 4; i++) {

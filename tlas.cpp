@@ -1,27 +1,26 @@
-#include "bvh.hpp"
+#include "tlas.hpp"
 
 #include <iostream>
-//-------------------------- Build BVH ---------------------------
 
-void updateNodeBounds(BVHNode& node,
-                      const std::vector<Triangle>& primitives,
+//-------------------------- Build TLAS ---------------------------
+
+void updateNodeBounds(TLASNode& node,
+                      const std::vector<Mesh>& meshes,
                       std::vector<uint>& indices) {
   node.aabbMin = vec3(FLT_MAX);
   node.aabbMax = vec3(-FLT_MAX);
-  for (uint i = 0; i < node.count; i++) {
-    const Triangle& leaf = primitives[indices[node.leftFirst + i]];
-    node.aabbMin = min(node.aabbMin, leaf.v0);
-    node.aabbMin = min(node.aabbMin, leaf.v1);
-    node.aabbMin = min(node.aabbMin, leaf.v2);
-    node.aabbMax = max(node.aabbMax, leaf.v0);
-    node.aabbMax = max(node.aabbMax, leaf.v1);
-    node.aabbMax = max(node.aabbMax, leaf.v2);
+  for (uint i = 0u; i < node.count; i++) {
+    const Mesh& leaf = meshes[indices[node.leftChild + i]];
+    node.aabbMin = min(node.aabbMin, leaf.transformedAABBMin);
+    node.aabbMin = min(node.aabbMin, leaf.transformedAABBMax);
+    node.aabbMax = max(node.aabbMax, leaf.transformedAABBMin);
+    node.aabbMax = max(node.aabbMax, leaf.transformedAABBMax);
   }
 }
 
-// Determine triangle counts and bounds for given split candidate
-float evaluateSAH(BVHNode& node, uint axis, float pos,
-                  const std::vector<Triangle>& primitives,
+// Determine mesh counts and bounds for given split candidate
+float evaluateSAH(TLASNode& node, uint axis, float pos,
+                  const std::vector<Mesh>& meshes,
                   std::vector<uint>& indices) {
   AABB leftBox{};
   AABB rightBox{};
@@ -30,28 +29,26 @@ float evaluateSAH(BVHNode& node, uint axis, float pos,
   uint rightCount{0};
 
   for (uint i = 0; i < node.count; i++) {
-    const Triangle& triangle = primitives[indices[node.leftFirst + i]];
-    if (triangle.centroid[axis] < pos) {
+    const Mesh& mesh = meshes[indices[node.leftChild + i]];
+    if (mesh.transformedCentroid[axis] < pos) {
       leftCount++;
-      leftBox.grow(triangle.v0);
-      leftBox.grow(triangle.v1);
-      leftBox.grow(triangle.v2);
+      leftBox.grow(mesh.transformedAABBMin);
+      leftBox.grow(mesh.transformedAABBMax);
     } else {
       rightCount++;
-      rightBox.grow(triangle.v0);
-      rightBox.grow(triangle.v1);
-      rightBox.grow(triangle.v2);
+      rightBox.grow(mesh.transformedAABBMin);
+      rightBox.grow(mesh.transformedAABBMax);
     }
   }
 
-  // Sum of the products of child box primitive counts and box surface areas
+  // Sum of the products of child box mesh counts and box surface areas
   float cost = leftCount * leftBox.area() + rightCount * rightBox.area();
   return cost > 0 ? cost : FLT_MAX;
 }
 
 // Determine best split axis and position using SAH
-float findBestSplitPlane(BVHNode& node,
-                         const std::vector<Triangle>& primitives,
+float findBestSplitPlane(TLASNode& node,
+                         const std::vector<Mesh>& meshes,
                          std::vector<uint>& indices,
                          uint& bestAxis, float& splitPos) {
   float bestCost = FLT_MAX;
@@ -61,11 +58,11 @@ float findBestSplitPlane(BVHNode& node,
     float boundsMin = FLT_MAX;
     float boundsMax = -FLT_MAX;
 
-    // Split the space bounded by primitive centroids
+    // Split the space bounded by mesh centroids
     for (uint i = 0u; i < node.count; i++) {
-      const Triangle& triangle = primitives[indices[node.leftFirst + i]];
-      boundsMin = min(boundsMin, triangle.centroid[axis]);
-      boundsMax = max(boundsMax, triangle.centroid[axis]);
+      const Mesh& mesh = meshes[indices[node.leftChild + i]];
+      boundsMin = min(boundsMin, mesh.transformedCentroid[axis]);
+      boundsMax = max(boundsMax, mesh.transformedCentroid[axis]);
     }
 
     if (boundsMin == boundsMax) {
@@ -77,12 +74,11 @@ float findBestSplitPlane(BVHNode& node,
     float binSize = COUNT / (boundsMax - boundsMin);
 
     for (uint i = 0; i < node.count; i++) {
-      const Triangle& triangle = primitives[indices[node.leftFirst + i]];
-      uint binIdx = min((float)COUNT - 1.0f, floor((triangle.centroid[axis] - boundsMin) * binSize));
+      const Mesh& mesh = meshes[indices[node.leftChild + i]];
+      uint binIdx = min((float)COUNT - 1.0f, floor((mesh.transformedCentroid[axis] - boundsMin) * binSize));
       bins[binIdx].count++;
-      bins[binIdx].bounds.grow(triangle.v0);
-      bins[binIdx].bounds.grow(triangle.v1);
-      bins[binIdx].bounds.grow(triangle.v2);
+      bins[binIdx].bounds.grow(mesh.transformedAABBMin);
+      bins[binIdx].bounds.grow(mesh.transformedAABBMax);
     }
 
     std::vector<float> leftArea(COUNT - 1u);
@@ -112,6 +108,8 @@ float findBestSplitPlane(BVHNode& node,
     float slabSize = (boundsMax - boundsMin) / COUNT;
     for (uint i = 0; i < COUNT - 1; i++) {
       float planeCost = 2.0f * leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
+      //  std::cout << "Split: " << planeCost << " vs " << bestCost << std::endl;
+
       if (planeCost < bestCost) {
         splitPos = boundsMin + slabSize * (i + 1u);
         bestAxis = axis;
@@ -122,36 +120,35 @@ float findBestSplitPlane(BVHNode& node,
   return bestCost;
 }
 
-float getNodeCost(const BVHNode& node) {
+float getNodeCost(const TLASNode& node) {
   vec3 dim = node.aabbMax - node.aabbMin;
-  float area = 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);
-  return node.count * area;
+  return node.count * 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);
 }
 
-// Recursively divide BVH node down to child nodes and include them in the tree
-void subdivide(std::vector<BVHNode>& bvh,
-               const std::vector<Triangle>& primitives,
+// Recursively divide TLAS node down to child nodes and include them in the tree
+void subdivide(std::vector<TLASNode>& tlas,
+               const std::vector<Mesh>& meshes,
                std::vector<uint>& indices,
                uint& nodeIdx,
                uint& nodesUsed) {
-  BVHNode& node = bvh[nodeIdx];
+  TLASNode& node = tlas[nodeIdx];
 
   // Determine best split axis and position using SAH
   uint bestAxis{0};
   float splitPos{0};
-  float bestSplitCost = findBestSplitPlane(node, primitives, indices, bestAxis, splitPos);
+  float bestSplitCost = findBestSplitPlane(node, meshes, indices, bestAxis, splitPos);
 
   if (bestSplitCost >= getNodeCost(node)) {
     return;
   }
 
   // Traverse list of indices from front and back
-  uint i = node.leftFirst;
+  uint i = node.leftChild;
   uint j = i + node.count - 1;
   // While the elements are not the same
   while (j < UINT_MAX && i <= j) {
     // If element is to the left of the partition, skip over it
-    if (primitives[indices[i]].centroid[bestAxis] < splitPos) {
+    if (meshes[indices[i]].transformedCentroid[bestAxis] < splitPos) {
       i++;
     } else {
       // Swap the element with the element at the back
@@ -161,7 +158,7 @@ void subdivide(std::vector<BVHNode>& bvh,
   }
 
   // Abort split if one of the sides is empty
-  uint leftCount = i - node.leftFirst;
+  uint leftCount = i - node.leftChild;
   if (leftCount == 0 || leftCount == node.count) {
     return;
   }
@@ -170,36 +167,36 @@ void subdivide(std::vector<BVHNode>& bvh,
   uint leftChildIdx = nodesUsed++;
   uint rightChildIdx = nodesUsed++;
 
-  // Left has primitives [0...leftCount) of the parent node
-  bvh[leftChildIdx].leftFirst = node.leftFirst;
-  bvh[leftChildIdx].count = leftCount;
+  // Left has meshes [0...leftCount) of the parent node
+  tlas[leftChildIdx].leftChild = node.leftChild;
+  tlas[leftChildIdx].count = leftCount;
 
-  // Right has primitives [leftCount...count)
-  bvh[rightChildIdx].leftFirst = i;
-  bvh[rightChildIdx].count = node.count - leftCount;
+  // Right has meshes [leftCount...count)
+  tlas[rightChildIdx].leftChild = i;
+  tlas[rightChildIdx].count = node.count - leftCount;
 
   // Mark parent node as an internal one with reference to left child node
-  node.leftFirst = leftChildIdx;
+  node.leftChild = leftChildIdx;
   node.count = 0;
 
-  updateNodeBounds(bvh[leftChildIdx], primitives, indices);
-  updateNodeBounds(bvh[rightChildIdx], primitives, indices);
+  updateNodeBounds(tlas[leftChildIdx], meshes, indices);
+  updateNodeBounds(tlas[rightChildIdx], meshes, indices);
 
   // Recurse
-  subdivide(bvh, primitives, indices, leftChildIdx, nodesUsed);
-  subdivide(bvh, primitives, indices, rightChildIdx, nodesUsed);
+  subdivide(tlas, meshes, indices, leftChildIdx, nodesUsed);
+  subdivide(tlas, meshes, indices, rightChildIdx, nodesUsed);
 }
 
-void buildBVH(
-    std::vector<BVHNode>& bvh,
-    const std::vector<Triangle>& primitives,
+void buildTLAS(
+    std::vector<TLASNode>& tlas,
+    const std::vector<Mesh>& meshes,
     std::vector<uint>& indices,
     uint& rootNodeIdx,
     uint& nodesUsed) {
-  BVHNode& root = bvh[rootNodeIdx];
+  TLASNode& root = tlas[rootNodeIdx];
 
-  root.leftFirst = 0;
-  root.count = primitives.size();
-  updateNodeBounds(root, primitives, indices);
-  subdivide(bvh, primitives, indices, rootNodeIdx, nodesUsed);
+  root.leftChild = 0;
+  root.count = meshes.size();
+  updateNodeBounds(root, meshes, indices);
+  subdivide(tlas, meshes, indices, rootNodeIdx, nodesUsed);
 }
