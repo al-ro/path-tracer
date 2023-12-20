@@ -31,17 +31,13 @@ void Mesh::update() {
   invModelMatrix = inverse(modelMatrix);
   normalMatrix = transpose(invModelMatrix);
 
-  vec3 aabbMin = modelMatrix * vec4(geometry.aabbMin, 1.0f);
-  vec3 aabbMax = modelMatrix * vec4(geometry.aabbMax, 1.0f);
-
   transformedAABBMin = vec3{FLT_MAX};
   transformedAABBMax = vec3{-FLT_MAX};
 
-  transformedAABBMin = min(transformedAABBMin, aabbMin);
-  transformedAABBMin = min(transformedAABBMin, aabbMax);
-
-  transformedAABBMax = max(transformedAABBMax, aabbMin);
-  transformedAABBMax = max(transformedAABBMax, aabbMax);
+  for (auto& corner : geometry.corners) {
+    transformedAABBMin = min(transformedAABBMin, vec3(modelMatrix * vec4(corner, 1.0f)));
+    transformedAABBMax = max(transformedAABBMax, vec3(modelMatrix * vec4(corner, 1.0f)));
+  }
 
   transformedCentroid = transformedAABBMin + 0.5f * (transformedAABBMax - transformedAABBMin);
 }

@@ -246,7 +246,7 @@ int main(int argc, char** argv) {
 
   // Parse command line arguments
   for (uint i = 0u; i < argc; i++) {
-    switch (getopt(argc, argv, "w:h:s:b:t:at:")) {
+    switch (getopt(argc, argv, "w:h:s:b:t:a")) {
       case 'w':
         width = atoi(optarg);
         continue;

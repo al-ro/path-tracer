@@ -12,6 +12,7 @@ class Geometry {
   std::vector<BVHNode> bvh{};
   vec3 aabbMin{FLT_MAX};
   vec3 aabbMax{-FLT_MAX};
+  std::vector<vec3> corners{8};
   vec3 centroid{0};
 
   Geometry() = delete;

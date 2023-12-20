@@ -17,6 +17,16 @@ Geometry::Geometry(std::vector<Triangle> primitives) : primitives{primitives},
 
   aabbMin = bvh[0].aabbMin;
   aabbMax = bvh[0].aabbMax;
+
+  corners[0] = vec3{aabbMin.x, aabbMin.y, aabbMin.z};
+  corners[1] = vec3{aabbMin.x, aabbMax.y, aabbMin.z};
+  corners[2] = vec3{aabbMin.x, aabbMin.y, aabbMax.z};
+  corners[3] = vec3{aabbMin.x, aabbMax.y, aabbMax.z};
+  corners[4] = vec3{aabbMax.x, aabbMin.y, aabbMin.z};
+  corners[5] = vec3{aabbMax.x, aabbMax.y, aabbMin.z};
+  corners[6] = vec3{aabbMax.x, aabbMin.y, aabbMax.z};
+  corners[7] = vec3{aabbMax.x, aabbMax.y, aabbMax.z};
+
   centroid = bvh[0].aabbMin + 0.5f * (bvh[0].aabbMax - bvh[0].aabbMin);
 }
 
