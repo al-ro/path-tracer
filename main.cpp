@@ -12,6 +12,7 @@
 #include "brdf.hpp"
 #include "colors.hpp"
 #include "geometry.hpp"
+#include "image.hpp"
 #include "input.hpp"
 #include "intersection.hpp"
 #include "mesh.hpp"
@@ -32,8 +33,6 @@ std::atomic<uint> atomicIdx{0u};
 /*
   TODO:
     Robust self-intersection fix
-    Vertex attributes
-    Materials with textures
     Normal mapping
 
     CUDA
@@ -79,12 +78,17 @@ vec3 getIllumination(Ray ray,
     const Mesh& mesh{scene.meshes[meshIdx]};
 
     vec3 p = ray.origin + ray.direction * ray.t;
-    vec3 N = normalize(vec3(mesh.normalMatrix * vec4(mesh.geometry.normals[closestHit.hitIndex], 0.0f)));
+    vec3 N = normalize(vec3(mesh.normalMatrix * vec4(mesh.geometry.getNormal(closestHit.hitIndex, closestHit.barycentric), 0.0f)));
+    if (dot(ray.direction, N) > 0.0f) {
+      N = -N;
+    }
     vec3 V = -ray.direction;
 
     const float metalness{mesh.material.metalness};
     const float roughness{mesh.material.roughness};
-    const vec3 albedo{mesh.material.albedo};
+    vec2 uv = mesh.geometry.getTexCoord(closestHit.hitIndex, closestHit.barycentric);
+    const vec3 albedo = mesh.material.getAlbedo(uv);
+    const vec3 emissive = mesh.material.getEmissive(uv);
 
     vec3 F0 = mix(mesh.material.F0, albedo, metalness);
 
@@ -146,7 +150,7 @@ vec3 getIllumination(Ray ray,
 
     // Combine diffuse and specular
     vec3 kD = (1.0f - F) * (1.0f - metalness);
-    col = specular + kD * diffuse;  // (1.0-metalness) * (1.0-fresnel(NdotL, F0))*(1.0-fresnel(NdotV, F0));
+    col = 4.0f * emissive + specular + kD * diffuse;  // (1.0-metalness) * (1.0-fresnel(NdotL, F0))*(1.0-fresnel(NdotV, F0));
 
   } else {
     col = getEnvironment(ray.direction);
@@ -240,7 +244,7 @@ int main(int argc, char** argv) {
   uint width{750};
   uint height{400};
   uint samples{32};
-  uint bounces{10};
+  uint bounces{6};
   uint numThreads{10};
   bool renderBVH{false};
 
@@ -291,38 +295,58 @@ int main(int argc, char** argv) {
   }
 
   Camera camera{
-      .position = 100.0f * vec3{-0.8f, 0.2f, 1.4f},
+      .position = 2.0f * vec3{0.5f, 0.25f, -0.8f},
       .target = vec3{0},
       .up = normalize(vec3{0, 1, 0}),
       .fieldOfView = 45.0f};
 
   // ----- Load model, generate normals and indices ----- //
 
+  std::vector<vec3> vertices{};
+  std::vector<vec3> normals{};
+  std::vector<vec2> texCoords{};
+  loadObj("models/viking-room/viking_room.obj", vertices, normals, texCoords);
+
+  std::vector<Triangle> triangles{};
+  for (int i = 0; i < vertices.size(); i += 3) {
+    // std::cout << "v0: " << vertices[i] << " v1: " << vertices[i + 1] << " v2: " << vertices[i + 2] << std::endl;
+    Triangle triangle{vertices[i], vertices[i + 1], vertices[i + 2]};
+    triangle.centroid = (triangle.v0 + triangle.v1 + triangle.v2) / 3.0f;
+    triangles.push_back(triangle);
+  }
+
+  VertexAttributes attributes{.normals = normals, .texCoords = texCoords};
+
   std::vector<Geometry> geometryPool;
-  geometryPool.emplace_back(Geometry{loadModel("models/bust-of-menelaus.stl")});
+  geometryPool.emplace_back(Geometry{triangles, attributes});
 
   std::vector<Mesh> meshes;
+
+  Image vikingAlbedoTexture = loadImage("models/viking-room/albedo.png");
+  Image emissiveTexture = loadImage("models/viking-room/emissive.png");
+
+  Material vikingMaterial = Material(vec3{1}, 0.0f, 0.01f);
+  vikingMaterial.albedoTexture = vikingAlbedoTexture;
+  vikingMaterial.emissiveTexture = emissiveTexture;
 
   uint rngState{7142u};
   bool randomScene{false};
   if (randomScene) {
     for (uint i = 0u; i < 512u; i++) {
-      meshes.emplace_back(Mesh{geometryPool[0], Material{.albedo = pow(hsv(getRandomFloat(rngState)), vec3{2.2}),
-                                                         .metalness = (getRandomFloat(rngState) > 0.65f ? 1.0f : 0.0f),
-                                                         .roughness = getRandomFloat(rngState) * 0.05f}});
+      meshes.emplace_back(Mesh{geometryPool[0], vikingMaterial});
       meshes[i].rotateX(-M_PI);
       meshes[i].rotateZ(2.0f * M_PI * getRandomFloat(rngState));
       meshes[i].rotateY(2.0f * M_PI * getRandomFloat(rngState));
-      meshes[i].scale(getRandomFloat(rngState));
+      // meshes[i].scale(getRandomFloat(rngState));
       meshes[i].center();
 
-      meshes[i].translate(600.0f * (2.0f * getRandomVec3(rngState) - 1.0f));
+      meshes[i].translate(10.0f * (2.0f * getRandomVec3(rngState) - 1.0f));
     }
   } else {
-    meshes.emplace_back(Mesh{geometryPool[0], Material{.albedo = vec3{1},
-                                                       .metalness = 0.0f,
-                                                       .roughness = 0.01f}});
+    meshes.emplace_back(Mesh{geometryPool[0], vikingMaterial});
+    meshes[0].rotateY(0.15f * M_PI);
     meshes[0].rotateX(-0.5f * M_PI);
+
     // meshes[0].scale(4.0f);
     meshes[0].center();
   }

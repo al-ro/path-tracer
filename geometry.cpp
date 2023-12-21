@@ -7,10 +7,12 @@
 #include "bvh.hpp"
 #include "intersection.hpp"
 
-Geometry::Geometry(std::vector<Triangle> primitives) : primitives{primitives},
-                                                       indices{std::vector<uint>(primitives.size())},
-                                                       normals{std::vector<vec3>(primitives.size())},
-                                                       bvh{std::vector<BVHNode>(2 * primitives.size() - 1)} {
+Geometry::Geometry(std::vector<Triangle> primitives,
+                   VertexAttributes attributes) : primitives{primitives},
+                                                  indices{std::vector<uint>(primitives.size())},
+                                                  normals{std::vector<vec3>(primitives.size())},
+                                                  attributes{attributes},
+                                                  bvh{std::vector<BVHNode>(2 * primitives.size() - 1)} {
   generateIndices();
   generateNormals();
   generateBVH();
@@ -53,7 +55,24 @@ void Geometry::generateBVH() {
   std::cout << "Nodes: " << nodesUsed << std::endl;
 }
 
-vec3 getNormal(const Triangle& triangle) {
+vec3 Geometry::getNormal(uint idx, vec2 barycentric) const {
+  if (attributes.normals.size() == 0) {
+    return normals[idx];
+  }
+  vec3 v0 = attributes.normals[3u * idx];
+  vec3 v1 = attributes.normals[3u * idx + 1u];
+  vec3 v2 = attributes.normals[3u * idx + 2u];
+  return barycentric.x * v1 + barycentric.y * v2 + (1.0f - (barycentric.x + barycentric.y)) * v0;
+}
+
+vec2 Geometry::getTexCoord(uint idx, vec2 barycentric) const {
+  vec2 v0 = attributes.texCoords[3u * idx];
+  vec2 v1 = attributes.texCoords[3u * idx + 1u];
+  vec2 v2 = attributes.texCoords[3u * idx + 2u];
+  return barycentric.x * v1 + barycentric.y * v2 + (1.0f - (barycentric.x + barycentric.y)) * v0;
+}
+
+vec3 calculateNormal(const Triangle& triangle) {
   return normalize(cross(triangle.v0 - triangle.v1, triangle.v0 - triangle.v2));
 }
 
@@ -66,7 +85,7 @@ void Geometry::generateIndices() {
 
 void Geometry::generateNormals() {
   for (uint i = 0; i < normals.size(); i++) {
-    normals[i] = getNormal(primitives[i]);
+    normals[i] = calculateNormal(primitives[i]);
   }
 }
 

@@ -16,7 +16,7 @@ class Mesh {
     A Mesh cannot be created without a Geometry and cannot have its geometry changed.
   */
   const Geometry& geometry;
-  Material material;
+  const Material& material;
   // Translation, rotation, scale
   mat4 modelMatrix = identity<mat4>();
 
@@ -31,7 +31,7 @@ class Mesh {
   vec3 centroid{0};
 
   Mesh() = delete;
-  Mesh(const Geometry&, Material);
+  Mesh(const Geometry&, const Material&);
   Mesh(const Mesh&) = delete;
   Mesh(Mesh&&) = default;
   ~Mesh() = default;

@@ -1,6 +1,7 @@
 #include <vector>
 
 #include "dataTypes.hpp"
+#include "image.hpp"
 
 using namespace glm;
 

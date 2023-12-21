@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-Mesh::Mesh(const Geometry& geometry, Material material) : geometry{geometry}, material{material} {
+Mesh::Mesh(const Geometry& geometry, const Material& material) : geometry{geometry}, material{material} {
   update();
 }
 

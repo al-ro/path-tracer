@@ -53,6 +53,19 @@ struct Triangle {
   inline vec3 getMax() const { return max(max(v0, v1), v2); }
 };
 
+struct VertexAttributes {
+  std::vector<vec3> normals{};
+  std::vector<vec2> texCoords{};
+  std::vector<vec3> tangents{};
+};
+// Matches the three vertices of a Triangle to the indices of the VertexAttribute containers
+struct AttributeIndices {
+  uint v0{};
+  uint v1{};
+  uint v2{};
+  uvec3 indices{};
+};
+
 /* Bounding volume hierarchy node */
 struct BVHNode {
   vec3 aabbMin;
@@ -91,19 +104,6 @@ struct Camera {
   vec3 up{};
   // FOV in degrees
   float fieldOfView{};
-};
-
-struct Image {
-  uint width{};
-  uint height{};
-  std::vector<vec3> data{width * height};
-
-  inline vec3 operator[](uint i) const {
-    return data[i];
-  }
-  inline vec3& operator[](uint i) {
-    return data[i];
-  }
 };
 
 inline std::ostream& operator<<(std::ostream& os, const vec3& v) {

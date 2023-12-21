@@ -6,10 +6,10 @@
 #include "lib/stb_image.h"
 #include "lib/stl_reader.h"
 
-Image loadImage(std::string path);
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "lib/tiny_obj_loader.h"
 
-// Read in .stl file and centre it. Generate triangle vertices and centroids
-std::vector<Triangle> loadModel(std::string path) {
+std::vector<Triangle> loadSTL(std::string path) {
   stl_reader::StlMesh<float, uint> mesh(path);
 
   std::vector<Triangle> triangles{mesh.num_tris()};
@@ -30,12 +30,110 @@ std::vector<Triangle> loadModel(std::string path) {
   return triangles;
 }
 
+void loadObj(std::string path,
+             std::vector<vec3>& vertices,
+             std::vector<vec3>& normals,
+             std::vector<vec2>& texCoords) {
+  tinyobj::ObjReaderConfig reader_config;
+  // reader_config.mtl_search_path = "./models";  // Path to material files
+  reader_config.triangulate = true;
+
+  tinyobj::ObjReader reader;
+
+  if (!reader.ParseFromFile(path, reader_config)) {
+    if (!reader.Error().empty()) {
+      std::cerr << "TinyObjReader: " << reader.Error();
+    }
+    return;
+  }
+
+  if (!reader.Warning().empty()) {
+    std::cout << "TinyObjReader: " << reader.Warning();
+  }
+
+  auto& attrib = reader.GetAttrib();
+  auto& shapes = reader.GetShapes();
+  auto& materials = reader.GetMaterials();
+
+  // Loop over shapes
+  for (size_t s = 0; s < shapes.size(); s++) {
+    // Loop over faces(polygon)
+    size_t index_offset = 0;
+    for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
+      size_t fv = size_t(shapes[s].mesh.num_face_vertices[f]);
+
+      // Loop over vertices in the face.
+      for (size_t v = 0; v < fv; v++) {
+        // access to vertex
+        tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
+        tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
+        tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
+        tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
+        vertices.push_back(vec3{vx, vy, vz});
+
+        // Check if `normal_index` is zero or positive. negative = no normal data
+        if (idx.normal_index >= 0) {
+          tinyobj::real_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
+          tinyobj::real_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
+          tinyobj::real_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
+          normals.push_back(normalize(vec3{nx, ny, nz}));
+        }
+
+        // Check if `texcoord_index` is zero or positive. negative = no texcoord data
+        if (idx.texcoord_index >= 0) {
+          tinyobj::real_t tx = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
+          tinyobj::real_t ty = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
+          texCoords.push_back(vec2{tx, 1.0 - ty});
+        }
+
+        // Optional: vertex colors
+        // tinyobj::real_t red   = attrib.colors[3*size_t(idx.vertex_index)+0];
+        // tinyobj::real_t green = attrib.colors[3*size_t(idx.vertex_index)+1];
+        // tinyobj::real_t blue  = attrib.colors[3*size_t(idx.vertex_index)+2];
+      }
+      index_offset += 3;
+
+      // per-face material
+      shapes[s].mesh.material_ids[f];
+    }
+  }
+  std::cout << "Model vertex count: " << vertices.size() << std::endl;
+}
+
 // Read in HDR image
 Image loadEnvironmentImage(std::string path) {
   int width;
   int height;
   int channels;
   vec3* data = reinterpret_cast<vec3*>(stbi_loadf(path.c_str(), &width, &height, &channels, STBI_rgb));
+  if (!data) {
+    std::cerr << "Failed to load image " << path << std::endl;
+  }
 
   return Image{static_cast<uint>(width), static_cast<uint>(height), std::vector<vec3>(data, data + width * height)};
+}
+
+inline vec3 RGB8toRGB32F(uint c) {
+  float s = 1 / 256.0f;
+  int r = (c >> 16) & 255;  // extract the red byte
+  int g = (c >> 8) & 255;   // extract the green byte
+  int b = c & 255;          // extract the blue byte
+  return vec3(r * s, g * s, b * s);
+}
+
+Image loadImage(std::string path) {
+  int width;
+  int height;
+  int channels;
+  stbi_uc* data = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb);
+  if (!data) {
+    std::cerr << "Failed to load image " << path << std::endl;
+  }
+
+  std::vector<vec3> rgbData(width * height);
+  for (uint i = 0u; i < rgbData.size(); i++) {
+    rgbData[i] = vec3(data[3 * i] / 255.0f, data[3 * i + 1] / 255.0f, data[3 * i + 2] / 255.0f);
+  }
+
+  return Image{static_cast<uint>(width), static_cast<uint>(height), rgbData};
 }
