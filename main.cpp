@@ -39,7 +39,6 @@ std::atomic<uint> atomicIdx{0u};
 
     Transmission
     Alpha texture
-    Emission
     Lights
 */
 
@@ -150,7 +149,7 @@ vec3 getIllumination(Ray ray,
 
     // Combine diffuse and specular
     vec3 kD = (1.0f - F) * (1.0f - metalness);
-    col = 4.0f * emissive + specular + kD * diffuse;  // (1.0-metalness) * (1.0-fresnel(NdotL, F0))*(1.0-fresnel(NdotV, F0));
+    col = emissive + specular + kD * diffuse;  // (1.0-metalness) * (1.0-fresnel(NdotL, F0))*(1.0-fresnel(NdotV, F0));
 
   } else {
     col = getEnvironment(ray.direction);
@@ -295,7 +294,7 @@ int main(int argc, char** argv) {
   }
 
   Camera camera{
-      .position = 2.0f * vec3{0.5f, 0.25f, -0.8f},
+      .position = 1.0f * vec3{0.5f, 0.25f, -0.8f},
       .target = vec3{0},
       .up = normalize(vec3{0, 1, 0}),
       .fieldOfView = 45.0f};
@@ -322,12 +321,10 @@ int main(int argc, char** argv) {
 
   std::vector<Mesh> meshes;
 
-  Image vikingAlbedoTexture = loadImage("models/viking-room/albedo.png");
-  Image emissiveTexture = loadImage("models/viking-room/emissive.png");
-
   Material vikingMaterial = Material(vec3{1}, 0.0f, 0.01f);
-  vikingMaterial.albedoTexture = vikingAlbedoTexture;
-  vikingMaterial.emissiveTexture = emissiveTexture;
+  vikingMaterial.albedoTexture = loadImage("models/viking-room/albedo.png");
+  vikingMaterial.emissiveTexture = loadImage("models/viking-room/emissive.png");
+  vikingMaterial.emissive = vec3{5};
 
   uint rngState{7142u};
   bool randomScene{false};

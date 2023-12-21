@@ -1,4 +1,4 @@
-CFLAGS = -std=c++17 -g
+CFLAGS = -std=c++17 -O3
 
 build:
 	g++ $(CFLAGS) -o PathTracer *.cpp

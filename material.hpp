@@ -5,12 +5,18 @@
 
 class Material {
  public:
+  // Albedo value or multiplier for albedo texture if provided
   vec3 albedo{1};
+  // Metalness value or multiplier for metalness texture if provided
   float metalness{0};
+  // Roughness value or multiplier for roughness texture if provided
   float roughness{0.01};
+  // Emission value or multiplier for emission texture if provided
   vec3 emissive{0};
 
+  // Multiplied with albedo
   Image albedoTexture{};
+  // Multiplied with emissive
   Image emissiveTexture{};
 
   // Index of refraction for common dielectrics. Corresponds to F0 0.04
