@@ -70,6 +70,6 @@ void Geometry::generateNormals() {
   }
 }
 
-void Geometry::intersect(Ray& ray, uint& index, uint& count) const {
-  return intersectBVH(ray, bvh, primitives, indices, 0, index, count);
+void Geometry::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
+  intersectBVH(ray, bvh, primitives, indices, 0, hitRecord, count);
 }

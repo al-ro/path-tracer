@@ -31,8 +31,7 @@ std::atomic<uint> atomicIdx{0u};
 
 /*
   TODO:
-    TLAS
-    HitRecord
+    Robust self-intersection fix
     Vertex attributes
     Materials with textures
     Normal mapping
@@ -70,16 +69,17 @@ vec3 getIllumination(Ray ray,
 
   vec3 col{0};
 
-  HitRecord closestHit = scene.intersect(ray, testCount);
+  HitRecord closestHit{};
 
-  ray.t = closestHit.dist;
+  uint meshIdx = scene.intersect(ray, closestHit, testCount);
 
-  if (ray.t < FLT_MAX) {
-    const Mesh& mesh{scene.meshes[closestHit.hitIndex]};
+  if (closestHit.dist < FLT_MAX) {
+    ray.t = closestHit.dist;
+
+    const Mesh& mesh{scene.meshes[meshIdx]};
 
     vec3 p = ray.origin + ray.direction * ray.t;
-    vec3 N = normalize(vec3(mesh.normalMatrix * vec4(closestHit.normal, 0.0f)));
-
+    vec3 N = normalize(vec3(mesh.normalMatrix * vec4(mesh.geometry.normals[closestHit.hitIndex], 0.0f)));
     vec3 V = -ray.direction;
 
     const float metalness{mesh.material.metalness};
@@ -201,7 +201,7 @@ void render(
     vec3 col{0};
     for (uint s = 0u; s < (renderBVH ? 1u : samples); s++) {
       vec2 fC = fragCoord;
-      if (!renderBVH) {
+      if (!renderBVH && samples > 1u) {
         // Jitter position for antialiasing
         fC += 0.5f * (2.0f * getRandomVec2(rngState) - 1.0f);
       }
@@ -212,8 +212,9 @@ void render(
 
       uint bvhTests = 0u;
       if (renderBVH) {
+        HitRecord closestHit{};
         // Get number of BVH tests for primary ray
-        scene.intersect(ray, bvhTests);
+        scene.intersect(ray, closestHit, bvhTests);
         image[idx] = vec3(bvhTests);
       } else {
         // Path trace scene
@@ -290,7 +291,7 @@ int main(int argc, char** argv) {
   }
 
   Camera camera{
-      .position = 400.0f * vec3{-0.8f, 0.2f, 1.4f},
+      .position = 100.0f * vec3{-0.8f, 0.2f, 1.4f},
       .target = vec3{0},
       .up = normalize(vec3{0, 1, 0}),
       .fieldOfView = 45.0f};
@@ -303,18 +304,27 @@ int main(int argc, char** argv) {
   std::vector<Mesh> meshes;
 
   uint rngState{7142u};
+  bool randomScene{false};
+  if (randomScene) {
+    for (uint i = 0u; i < 512u; i++) {
+      meshes.emplace_back(Mesh{geometryPool[0], Material{.albedo = pow(hsv(getRandomFloat(rngState)), vec3{2.2}),
+                                                         .metalness = (getRandomFloat(rngState) > 0.65f ? 1.0f : 0.0f),
+                                                         .roughness = getRandomFloat(rngState) * 0.05f}});
+      meshes[i].rotateX(-M_PI);
+      meshes[i].rotateZ(2.0f * M_PI * getRandomFloat(rngState));
+      meshes[i].rotateY(2.0f * M_PI * getRandomFloat(rngState));
+      meshes[i].scale(getRandomFloat(rngState));
+      meshes[i].center();
 
-  for (uint i = 0u; i < 100u; i++) {
-    meshes.emplace_back(Mesh{geometryPool[0], Material{.albedo = pow(hsv(getRandomFloat(rngState)), vec3{2.2}),
-                                                       .metalness = (getRandomFloat(rngState) > 0.5f ? 1.0f : 0.0f),
-                                                       .roughness = getRandomFloat(rngState) * 0.05f}});
-    meshes[i].rotateX(-M_PI);
-    meshes[i].rotateZ(2.0f * M_PI * getRandomFloat(rngState));
-    meshes[i].rotateY(2.0f * M_PI * getRandomFloat(rngState));
-    meshes[i].scale(getRandomFloat(rngState));
-    meshes[i].center();
-
-    meshes[i].translate(400.0f * (2.0f * getRandomVec3(rngState) - 1.0f));
+      meshes[i].translate(600.0f * (2.0f * getRandomVec3(rngState) - 1.0f));
+    }
+  } else {
+    meshes.emplace_back(Mesh{geometryPool[0], Material{.albedo = vec3{1},
+                                                       .metalness = 0.0f,
+                                                       .roughness = 0.01f}});
+    meshes[0].rotateX(-0.5f * M_PI);
+    // meshes[0].scale(4.0f);
+    meshes[0].center();
   }
 
   Scene scene(std::move(meshes));

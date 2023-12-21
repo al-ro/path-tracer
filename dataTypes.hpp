@@ -81,7 +81,7 @@ struct Ray {
 struct HitRecord {
   uint hitIndex{UINT_MAX};
   float dist{FLT_MAX};
-  vec3 normal{0};
+  vec2 barycentric{0};
 };
 
 struct Camera {

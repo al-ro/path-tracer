@@ -6,25 +6,14 @@ Mesh::Mesh(const Geometry& geometry, Material material) : geometry{geometry}, ma
   update();
 }
 
-HitRecord Mesh::intersect(const Ray& ray, uint& count) const {
+void Mesh::intersect(const Ray& ray, HitRecord& hitRecord, uint& count) const {
   Ray transformedRay = ray;
   transformedRay.origin = invModelMatrix * vec4(ray.origin, 1.0f);
   // Not normalized to handle scale transform
   transformedRay.direction = invModelMatrix * vec4(ray.direction, 0.0f);
   transformedRay.invDirection = 1.0f / transformedRay.direction;
 
-  uint hitIndex{UINT_MAX};
-
-  // Hit distance is recorded in .t of the ray passed in
-  geometry.intersect(transformedRay, hitIndex, count);
-
-  vec3 normal{0};
-
-  if (hitIndex < UINT_MAX) {
-    normal = geometry.normals[hitIndex];
-  }
-
-  return HitRecord{hitIndex, transformedRay.t, normal};
+  geometry.intersect(transformedRay, hitRecord, count);
 }
 
 void Mesh::update() {

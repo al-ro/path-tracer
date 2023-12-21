@@ -1,21 +1,22 @@
 #include "dataTypes.hpp"
 #include "mesh.hpp"
 
-float intersect(const Ray& ray, const Triangle& triangle);
+void intersect(const Ray& ray, const Triangle& triangle, HitRecord& hitRecord);
 float intersect(const Ray& ray, const AABB& aabb);
 float intersect(const Ray& ray, const vec3& aabbMin, const vec3& aabbMax);
-HitRecord intersect(Ray& ray, const Mesh& mesh, uint& count);
+void intersect(Ray& ray, const Mesh& mesh, HitRecord& hitRecord, uint& count);
 
 void intersectBVH(Ray& ray,
                   const std::vector<BVHNode>& bvh,
                   const std::vector<Triangle>& primitives,
                   const std::vector<uint>& indices,
                   const uint nodeIdx,
-                  uint& hitIndex,
+                  HitRecord& HitRecord,
                   uint& count);
 
-HitRecord intersectTLAS(Ray& ray,
-                        const std::vector<BVHNode>& tlas,
-                        const std::vector<Mesh>& scene,
-                        const std::vector<uint>& indices,
-                        uint& count);
+uint intersectTLAS(Ray& ray,
+                   const std::vector<BVHNode>& tlas,
+                   const std::vector<Mesh>& scene,
+                   const std::vector<uint>& indices,
+                   HitRecord& hitRecord,
+                   uint& count);

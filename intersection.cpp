@@ -3,7 +3,7 @@
 #include <stack>
 
 // Möller–Trumbore
-float intersect(const Ray& ray, const Triangle& triangle) {
+float intersect(const Ray& ray, const Triangle& triangle, vec2& barycentric) {
   const vec3 edge1 = triangle.v1 - triangle.v0;
   const vec3 edge2 = triangle.v2 - triangle.v0;
   const vec3 h = cross(ray.direction, edge2);
@@ -30,7 +30,12 @@ float intersect(const Ray& ray, const Triangle& triangle) {
   }
 
   float t = f * dot(edge2, q);
-  return t > 0.0f ? t : FLT_MAX;
+  if (t > 0.0f) {
+    barycentric = vec2{u, v};
+    return t;
+  }
+
+  return FLT_MAX;
 }
 
 // Slab method without division
@@ -63,21 +68,24 @@ void intersectBVH(
     const std::vector<Triangle>& primitives,
     const std::vector<uint>& indices,
     const uint nodeIdx,
-    uint& hitIndex,
+    HitRecord& hitRecord,
     uint& count) {
   const BVHNode* node = &bvh[nodeIdx];
   std::stack<const BVHNode*> stack;
-  uint idx{};
+  uint primitiveIndex{};
+  vec2 barycentric{0};
 
   while (1) {
     // If leaf node, intersect with primitives
     if (node->count > 0) {
       for (uint i = 0; i < node->count; i++) {
-        idx = indices[node->leftFirst + i];
-        float distance = intersect(ray, primitives[idx]);
+        primitiveIndex = indices[node->leftFirst + i];
+        float distance = intersect(ray, primitives[primitiveIndex], barycentric);
         if (distance < ray.t) {
           ray.t = distance;
-          hitIndex = idx;
+          hitRecord.dist = distance;
+          hitRecord.barycentric = barycentric;
+          hitRecord.hitIndex = primitiveIndex;
         }
       }
 
@@ -127,27 +135,32 @@ void intersectBVH(
   }
 }
 
-HitRecord intersectTLAS(Ray& ray,
-                        const std::vector<BVHNode>& tlas,
-                        const std::vector<Mesh>& scene,
-                        const std::vector<uint>& indices,
-                        uint& count) {
+uint intersectTLAS(Ray& ray,
+                   const std::vector<BVHNode>& tlas,
+                   const std::vector<Mesh>& primitives,
+                   const std::vector<uint>& indices,
+                   HitRecord& closestHit,
+                   uint& count) {
   const BVHNode* node = &tlas[0];
   std::stack<const BVHNode*> stack{};
-  HitRecord closestHit{};
+  uint meshIndex{UINT_MAX};
   uint idx{};
+  vec2 barycentric{0};
+  HitRecord hitRecord = closestHit;
 
   while (1) {
-    if (node->count > 0u) {
+    // If leaf node, intersect with primitives
+    if (node->count > 0) {
       for (uint i = 0; i < node->count; i++) {
         idx = indices[node->leftFirst + i];
-        HitRecord hit = scene[idx].intersect(ray, count);
-        if (hit.dist < closestHit.dist) {
-          ray.t = hit.dist;
-          closestHit = hit;
-          closestHit.hitIndex = idx;
+        primitives[idx].intersect(ray, hitRecord, count);
+        if (hitRecord.dist < closestHit.dist) {
+          closestHit = hitRecord;
+          ray.t = closestHit.dist;
+          meshIndex = idx;
         }
       }
+
       // If stack is empty, exit loop. Else grab next element on stack
       if (stack.empty()) {
         break;
@@ -192,5 +205,5 @@ HitRecord intersectTLAS(Ray& ray,
       }
     }
   }
-  return closestHit;
+  return meshIndex;
 }

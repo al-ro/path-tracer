@@ -21,5 +21,5 @@ class Scene {
   void add(const Mesh& mesh) = delete;
   void remove(const Mesh& mesh) = delete;
 
-  HitRecord intersect(Ray& ray, uint& count) const;
+  uint intersect(Ray& ray, HitRecord& hitRecord, uint& count) const;
 };
