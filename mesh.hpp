@@ -26,9 +26,9 @@ class Mesh {
   mat4 normalMatrix = transpose(invModelMatrix);
 
   // Transformed limits for constructing TLAS
-  vec3 transformedAABBMin{FLT_MAX};
-  vec3 transformedAABBMax{-FLT_MAX};
-  vec3 transformedCentroid{0};
+  vec3 aabbMin{FLT_MAX};
+  vec3 aabbMax{-FLT_MAX};
+  vec3 centroid{0};
 
   Mesh() = delete;
   Mesh(const Geometry&, Material);
@@ -42,6 +42,9 @@ class Mesh {
   void rotateZ(float angle);
   void scale(float scale);
   void update();
+
+  vec3 getMin() const;
+  vec3 getMax() const;
 
   // Find the distance to the closest intersection, the index of the primitive and the number of BVH tests.
   // Primitive index and distance to hit is packed into HitRecord (FLT_MAX if no intersection)

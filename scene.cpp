@@ -2,10 +2,10 @@
 
 #include <chrono>
 
-#include "tlas.hpp"
+#include "bvh.hpp"
 
 Scene::Scene(std::vector<Mesh>&& meshes_) : meshes{std::move(meshes_)},
-                                            tlas{std::vector<TLASNode>(2.0 * meshes.size() - 1)},
+                                            tlas{std::vector<BVHNode>(2.0 * meshes.size() - 1)},
                                             indices{std::vector<uint>(meshes.size())} {
   generateIndices();
   generateTLAS();
@@ -17,7 +17,8 @@ void Scene::generateTLAS() {
 
   auto start{std::chrono::steady_clock::now()};
 
-  buildTLAS(tlas, meshes, indices, rootNodeIdx, nodesUsed);
+  // Build TLAS of meshes in the scene
+  buildBVH(tlas, meshes, indices, rootNodeIdx, nodesUsed);
 
   // TLAS vector was created to store the maximum 2N-1 nodes of an N leaf binary tree
   // Resize it to actually used number of nodes to save memory space

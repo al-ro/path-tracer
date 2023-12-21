@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "brdf.hpp"
-#include "bvh.hpp"
+#include "colors.hpp"
 #include "geometry.hpp"
 #include "input.hpp"
 #include "intersection.hpp"
@@ -18,7 +18,6 @@
 #include "output.hpp"
 #include "random.hpp"
 #include "scene.hpp"
-#include "tlas.hpp"
 
 using namespace glm;
 
@@ -306,8 +305,9 @@ int main(int argc, char** argv) {
   uint rngState{7142u};
 
   for (uint i = 0u; i < 100u; i++) {
-    meshes.emplace_back(Mesh{geometryPool[0], Material{.albedo = mix(vec3{1}, getRandomVec3(rngState), 0.5),
-                                                       .metalness = (getRandomFloat(rngState) > 0.65f ? 1.0f : 0.0f)}});
+    meshes.emplace_back(Mesh{geometryPool[0], Material{.albedo = pow(hsv(getRandomFloat(rngState)), vec3{2.2}),
+                                                       .metalness = (getRandomFloat(rngState) > 0.5f ? 1.0f : 0.0f),
+                                                       .roughness = getRandomFloat(rngState) * 0.05f}});
     meshes[i].rotateX(-M_PI);
     meshes[i].rotateZ(2.0f * M_PI * getRandomFloat(rngState));
     meshes[i].rotateY(2.0f * M_PI * getRandomFloat(rngState));
@@ -350,12 +350,9 @@ int main(int argc, char** argv) {
 
     float inverseMaxElement = 1.0f / maxElement.x;
 
-    vec3 lowCol = pow(vec3{0}, vec3(2.2));
-    vec3 highCol = pow(vec3{1}, vec3(2.2));
     for (vec3& p : image.data) {
       if (p.x > 0.0f) {
-        p = mix(lowCol, highCol, p.x * inverseMaxElement);
-        p = pow(p, vec3(0.4545));
+        p = afmhot(p.x * inverseMaxElement);
       }
     }
   }

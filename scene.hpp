@@ -8,7 +8,7 @@ class Scene {
  public:
   std::vector<Mesh> meshes;
   std::vector<uint> indices;
-  std::vector<TLASNode> tlas;
+  std::vector<BVHNode> tlas;
 
   Scene() = default;
   Scene(std::vector<Mesh>&& meshes);

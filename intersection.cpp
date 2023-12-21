@@ -128,19 +128,19 @@ void intersectBVH(
 }
 
 HitRecord intersectTLAS(Ray& ray,
-                        const std::vector<TLASNode>& tlas,
+                        const std::vector<BVHNode>& tlas,
                         const std::vector<Mesh>& scene,
                         const std::vector<uint>& indices,
                         uint& count) {
-  const TLASNode* node = &tlas[0];
-  std::stack<const TLASNode*> stack{};
+  const BVHNode* node = &tlas[0];
+  std::stack<const BVHNode*> stack{};
   HitRecord closestHit{};
   uint idx{};
 
   while (1) {
     if (node->count > 0u) {
       for (uint i = 0; i < node->count; i++) {
-        idx = indices[node->leftChild + i];
+        idx = indices[node->leftFirst + i];
         HitRecord hit = scene[idx].intersect(ray, count);
         if (hit.dist < closestHit.dist) {
           ray.t = hit.dist;
@@ -160,8 +160,8 @@ HitRecord intersectTLAS(Ray& ray,
     }
 
     // Compare the distances to the two child nodes
-    const TLASNode* child1 = &tlas[node->leftChild];
-    const TLASNode* child2 = &tlas[node->leftChild + 1];
+    const BVHNode* child1 = &tlas[node->leftFirst];
+    const BVHNode* child2 = &tlas[node->leftFirst + 1];
     float dist1 = intersect(ray, child1->aabbMin, child1->aabbMax);
     float dist2 = intersect(ray, child2->aabbMin, child2->aabbMax);
 

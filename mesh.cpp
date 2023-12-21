@@ -31,15 +31,15 @@ void Mesh::update() {
   invModelMatrix = inverse(modelMatrix);
   normalMatrix = transpose(invModelMatrix);
 
-  transformedAABBMin = vec3{FLT_MAX};
-  transformedAABBMax = vec3{-FLT_MAX};
+  aabbMin = vec3{FLT_MAX};
+  aabbMax = vec3{-FLT_MAX};
 
   for (auto& corner : geometry.corners) {
-    transformedAABBMin = min(transformedAABBMin, vec3(modelMatrix * vec4(corner, 1.0f)));
-    transformedAABBMax = max(transformedAABBMax, vec3(modelMatrix * vec4(corner, 1.0f)));
+    aabbMin = min(aabbMin, vec3(modelMatrix * vec4(corner, 1.0f)));
+    aabbMax = max(aabbMax, vec3(modelMatrix * vec4(corner, 1.0f)));
   }
 
-  transformedCentroid = transformedAABBMin + 0.5f * (transformedAABBMax - transformedAABBMin);
+  centroid = aabbMin + 0.5f * (aabbMax - aabbMin);
 }
 
 void Mesh::translate(vec3 t) {
@@ -70,4 +70,12 @@ void Mesh::scale(float scale) {
 void Mesh::center() {
   modelMatrix = glm::translate(modelMatrix, -geometry.centroid);
   update();
+}
+
+vec3 Mesh::getMin() const {
+  return aabbMin;
+}
+
+vec3 Mesh::getMax() const {
+  return aabbMax;
 }

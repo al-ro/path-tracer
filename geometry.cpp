@@ -41,6 +41,7 @@ void Geometry::generateBVH() {
 
   auto start{std::chrono::steady_clock::now()};
 
+  // Build BLAS of triangles of the geometry
   buildBVH(bvh, primitives, indices, rootNodeIdx, nodesUsed);
 
   // BVH vector was created to store the maximum 2N-1 nodes of an N leaf binary tree

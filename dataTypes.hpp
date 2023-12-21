@@ -37,7 +37,7 @@ struct AABB {
   }
 
   // Return surface area 2xy * 2xz * 2yz
-  inline float area() {
+  inline float area() const {
     vec3 dim = max - min;
     return 2.0f * (dim.x * dim.y + dim.y * dim.z + dim.z * dim.x);
   }
@@ -49,6 +49,8 @@ struct Triangle {
   vec3 v2{};
   // Location for spatial sorting
   vec3 centroid{FLT_MAX};
+  inline vec3 getMin() const { return min(min(v0, v1), v2); }
+  inline vec3 getMax() const { return max(max(v0, v1), v2); }
 };
 
 /* Bounding volume hierarchy node */
@@ -58,15 +60,6 @@ struct BVHNode {
   // Index of first primitive or left child
   uint leftFirst;
   // Number of primitives
-  uint count;
-};
-
-struct TLASNode {
-  vec3 aabbMin;
-  vec3 aabbMax;
-  // Index of first Mesh or left child
-  uint leftChild;
-  // Number of Mesh objects
   uint count;
 };
 
