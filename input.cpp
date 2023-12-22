@@ -113,14 +113,6 @@ Image loadEnvironmentImage(std::string path) {
   return Image{static_cast<uint>(width), static_cast<uint>(height), std::vector<vec3>(data, data + width * height)};
 }
 
-inline vec3 RGB8toRGB32F(uint c) {
-  float s = 1 / 256.0f;
-  int r = (c >> 16) & 255;  // extract the red byte
-  int g = (c >> 8) & 255;   // extract the green byte
-  int b = c & 255;          // extract the blue byte
-  return vec3(r * s, g * s, b * s);
-}
-
 Image loadImage(std::string path) {
   int width;
   int height;

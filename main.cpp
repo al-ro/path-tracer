@@ -136,7 +136,7 @@ vec3 getIllumination(Ray ray,
         vec3 brdfS = D * F * G / max(0.0001, (4.0 * NdotV * NdotL));
 
         float pdfSpecular = (D * NdotH) / (4.0 * VdotH);
-        vec3 specular = (getEnvironment(sampleDir) * brdfS * NdotL) / pdfSpecular;
+        vec3 specular = (L(sampleDir) * brdfS * NdotL) / pdfSpecular;
 
     */
 
@@ -180,8 +180,8 @@ void render(
     const Camera& camera,
     Image& image,
     const uint samples,
-    int maxBounces,
-    bool renderBVH,
+    const int maxBounces,
+    const bool renderBVH,
     const uint threadId) {
   Ray ray{.origin = camera.position};
   vec2 fragCoord{};
@@ -248,8 +248,9 @@ int main(int argc, char** argv) {
   bool renderBVH{false};
 
   // Parse command line arguments
-  for (uint i = 0u; i < argc; i++) {
-    switch (getopt(argc, argv, "w:h:s:b:t:a")) {
+  int opt;
+  while ((opt = getopt(argc, argv, " w:h:s:b:t:a")) != -1) {
+    switch (opt) {
       case 'w':
         width = atoi(optarg);
         continue;
