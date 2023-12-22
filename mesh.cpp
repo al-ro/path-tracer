@@ -6,7 +6,7 @@ Mesh::Mesh(const Geometry& geometry, const Material& material) : geometry{geomet
   update();
 }
 
-void Mesh::intersect(const Ray& ray, HitRecord& hitRecord, uint& count) const {
+void Mesh::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
   Ray transformedRay = ray;
   transformedRay.origin = invModelMatrix * vec4(ray.origin, 1.0f);
   // Not normalized to handle scale transform
@@ -14,6 +14,7 @@ void Mesh::intersect(const Ray& ray, HitRecord& hitRecord, uint& count) const {
   transformedRay.invDirection = 1.0f / transformedRay.direction;
 
   geometry.intersect(transformedRay, hitRecord, count);
+  ray.t = transformedRay.t;
 }
 
 void Mesh::update() {

@@ -16,7 +16,7 @@ void intersectBVH(Ray& ray,
 
 uint intersectTLAS(Ray& ray,
                    const std::vector<BVHNode>& tlas,
-                   const std::vector<Mesh>& scene,
+                   const std::vector<Mesh>& meshes,
                    const std::vector<uint>& indices,
                    HitRecord& hitRecord,
                    uint& count);

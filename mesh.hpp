@@ -48,7 +48,7 @@ class Mesh {
 
   // Find the distance to the closest intersection, the index of the primitive and the number of BVH tests.
   // Primitive index and distance to hit is packed into HitRecord (FLT_MAX if no intersection)
-  void intersect(const Ray& ray, HitRecord& hitRecord, uint& count) const;
+  void intersect(Ray& ray, HitRecord& hitRecord, uint& count) const;
 
   // Center geometry at the origin
   void center();

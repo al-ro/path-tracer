@@ -71,9 +71,7 @@ vec3 getIllumination(Ray ray,
 
   uint meshIdx = scene.intersect(ray, closestHit, testCount);
 
-  if (closestHit.dist < FLT_MAX) {
-    ray.t = closestHit.dist;
-
+  if (ray.t < FLT_MAX) {
     const Mesh& mesh{scene.meshes[meshIdx]};
 
     vec3 p = ray.origin + ray.direction * ray.t;

@@ -58,18 +58,10 @@ struct VertexAttributes {
   std::vector<vec2> texCoords{};
   std::vector<vec3> tangents{};
 };
-// Matches the three vertices of a Triangle to the indices of the VertexAttribute containers
-struct AttributeIndices {
-  uint v0{};
-  uint v1{};
-  uint v2{};
-  uvec3 indices{};
-};
 
 /* Bounding volume hierarchy node */
 struct BVHNode {
-  vec3 aabbMin;
-  vec3 aabbMax;
+  AABB aabb;
   // Index of first primitive or left child
   uint leftFirst;
   // Number of primitives
@@ -93,7 +85,6 @@ struct Ray {
 
 struct HitRecord {
   uint hitIndex{UINT_MAX};
-  float dist{FLT_MAX};
   vec2 barycentric{0};
 };
 

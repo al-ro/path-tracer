@@ -11,12 +11,12 @@ template <typename Primitive>
 void updateNodeBounds(BVHNode& node,
                       const std::vector<Primitive>& primitives,
                       std::vector<uint>& indices) {
-  node.aabbMin = vec3(FLT_MAX);
-  node.aabbMax = vec3(-FLT_MAX);
+  node.aabb.min = vec3(FLT_MAX);
+  node.aabb.max = vec3(-FLT_MAX);
   for (uint i = 0; i < node.count; i++) {
     const Primitive& leaf = primitives[indices[node.leftFirst + i]];
-    node.aabbMin = min(node.aabbMin, leaf.getMin());
-    node.aabbMax = max(node.aabbMax, leaf.getMax());
+    node.aabb.min = min(node.aabb.min, leaf.getMin());
+    node.aabb.max = max(node.aabb.max, leaf.getMax());
   }
 }
 

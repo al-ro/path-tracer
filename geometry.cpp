@@ -17,8 +17,8 @@ Geometry::Geometry(std::vector<Triangle> primitives,
   generateNormals();
   generateBVH();
 
-  aabbMin = bvh[0].aabbMin;
-  aabbMax = bvh[0].aabbMax;
+  aabbMin = bvh[0].aabb.min;
+  aabbMax = bvh[0].aabb.max;
 
   corners[0] = vec3{aabbMin.x, aabbMin.y, aabbMin.z};
   corners[1] = vec3{aabbMin.x, aabbMax.y, aabbMin.z};
@@ -29,7 +29,7 @@ Geometry::Geometry(std::vector<Triangle> primitives,
   corners[6] = vec3{aabbMax.x, aabbMin.y, aabbMax.z};
   corners[7] = vec3{aabbMax.x, aabbMax.y, aabbMax.z};
 
-  centroid = bvh[0].aabbMin + 0.5f * (bvh[0].aabbMax - bvh[0].aabbMin);
+  centroid = bvh[0].aabb.min + 0.5f * (bvh[0].aabb.max - bvh[0].aabb.min);
 }
 
 void Geometry::generateBVH() {
