@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-Mesh::Mesh(const Geometry& geometry, const Material& material) : geometry{geometry}, material{material} {
+Mesh::Mesh(std::shared_ptr<Geometry> geometry, std::shared_ptr<Material> material) : geometry{geometry}, material{material} {
   update();
 }
 
@@ -13,18 +13,28 @@ void Mesh::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
   transformedRay.direction = invModelMatrix * vec4(ray.direction, 0.0f);
   transformedRay.invDirection = 1.0f / transformedRay.direction;
 
-  geometry.intersect(transformedRay, hitRecord, count);
+  geometry->intersect(transformedRay, hitRecord, count);
   ray.t = transformedRay.t;
 }
 
 void Mesh::update() {
+  modelMatrix = identity<mat4>();
+
+  modelMatrix = glm::scale(modelMatrix, vec3(scale));
+  modelMatrix = glm::rotate(modelMatrix, rotation.x, vec3(1, 0, 0));
+  modelMatrix = glm::rotate(modelMatrix, rotation.y, vec3(0, 1, 0));
+  modelMatrix = glm::rotate(modelMatrix, rotation.z, vec3(0, 0, 1));
+
+  modelMatrix = glm::translate(modelMatrix, vec3(inverse(modelMatrix) * vec4(translation, 1.0f)));
+  modelMatrix = glm::translate(modelMatrix, -geometry->centroid);
+
   invModelMatrix = inverse(modelMatrix);
   normalMatrix = transpose(invModelMatrix);
 
   aabbMin = vec3{FLT_MAX};
   aabbMax = vec3{-FLT_MAX};
 
-  for (auto& corner : geometry.corners) {
+  for (const auto& corner : geometry->corners) {
     aabbMin = min(aabbMin, vec3(modelMatrix * vec4(corner, 1.0f)));
     aabbMax = max(aabbMax, vec3(modelMatrix * vec4(corner, 1.0f)));
   }
@@ -32,33 +42,33 @@ void Mesh::update() {
   centroid = aabbMin + 0.5f * (aabbMax - aabbMin);
 }
 
-void Mesh::translate(vec3 t) {
-  modelMatrix = glm::translate(modelMatrix, t);
+void Mesh::setPosition(vec3 t) {
+  translation = t;
   update();
 }
 
-void Mesh::rotateX(float angle) {
-  modelMatrix = rotate(modelMatrix, angle, vec3(1, 0, 0));
+void Mesh::setRotationX(float angle) {
+  rotation.x = angle;
   update();
 }
 
-void Mesh::rotateY(float angle) {
-  modelMatrix = rotate(modelMatrix, angle, vec3(0, 1, 0));
+void Mesh::setRotationY(float angle) {
+  rotation.y = angle;
   update();
 }
 
-void Mesh::rotateZ(float angle) {
-  modelMatrix = rotate(modelMatrix, angle, vec3(0, 0, 1));
+void Mesh::setRotationZ(float angle) {
+  rotation.z = angle;
   update();
 }
 
-void Mesh::scale(float scale) {
-  modelMatrix = glm::scale(modelMatrix, vec3{scale});
+void Mesh::setScale(float scale) {
+  this->scale = scale;
   update();
 }
 
 void Mesh::center() {
-  modelMatrix = glm::translate(modelMatrix, -geometry.centroid);
+  translation = -geometry->centroid;
   update();
 }
 

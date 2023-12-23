@@ -4,14 +4,21 @@
 
 #include "bvh.hpp"
 
-Scene::Scene(std::vector<Mesh>&& meshes_) : meshes{std::move(meshes_)},
-                                            tlas{std::vector<BVHNode>(2.0 * meshes.size() - 1)},
-                                            indices{std::vector<uint>(meshes.size())} {
+Scene::Scene(const std::vector<Mesh>& meshes) : meshes{meshes},
+                                                tlas{std::vector<BVHNode>(2.0 * meshes.size() - 1)},
+                                                indices{std::vector<uint>(meshes.size())} {
+  generateIndices();
+  generateTLAS();
+}
+
+void Scene::completeScene() {
   generateIndices();
   generateTLAS();
 }
 
 void Scene::generateTLAS() {
+  tlas = std::vector<BVHNode>(2.0 * meshes.size() - 1);
+
   uint nodesUsed{1};
   uint rootNodeIdx{0};
 
@@ -30,6 +37,9 @@ void Scene::generateTLAS() {
 }
 
 void Scene::generateIndices() {
+  if (indices.size() == 0) {
+    indices = std::vector<uint>(meshes.size());
+  }
   // Populate primitives indices sequentially [0...N)
   for (uint i = 0u; i < indices.size(); i++) {
     indices[i] = i;

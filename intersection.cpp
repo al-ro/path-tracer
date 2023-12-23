@@ -5,7 +5,7 @@
 // Möller–Trumbore ray-triangle intersection
 // Return distance to triangle and the barycentric coordinates if there is a hit
 // FLT_MAX if no hit
-float intersect(const Ray& ray, const Triangle& triangle, vec2& barycentric) {
+inline float intersect(const Ray& ray, const Triangle& triangle, vec2& barycentric) {
   const vec3 edge1 = triangle.v1 - triangle.v0;
   const vec3 edge2 = triangle.v2 - triangle.v0;
   const vec3 h = cross(ray.direction, edge2);

@@ -8,7 +8,7 @@ class Geometry {
  public:
   std::vector<Triangle> primitives{};
   std::vector<uint> indices{};
-  std::vector<vec3> normals{};
+  std::vector<vec3> faceNormals{};
   VertexAttributes attributes{};
   std::vector<BVHNode> bvh{};
   vec3 aabbMin{FLT_MAX};
@@ -19,7 +19,7 @@ class Geometry {
   Geometry() = delete;
   Geometry(const Geometry&) = delete;
 
-  Geometry(std::vector<Triangle> primitives, VertexAttributes attributes);
+  Geometry(std::vector<Triangle> primitives, VertexAttributes attributes = VertexAttributes{});
 
   Geometry(Geometry&&) = default;
   ~Geometry() = default;

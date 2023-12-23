@@ -11,12 +11,16 @@
 */
 class Mesh {
  public:
-  /*
-    Reference to an externally managed complete Geometry.
-    A Mesh cannot be created without a Geometry and cannot have its geometry changed.
-  */
-  const Geometry& geometry;
-  const Material& material;
+  // Reference to an externally managed complete Geometry.
+  std::shared_ptr<Geometry> geometry;
+
+  // Reference to an externally managed Material.
+  std::shared_ptr<Material> material;
+
+  vec3 translation{0};
+  vec3 rotation{0};
+  float scale{1};
+
   // Translation, rotation, scale
   mat4 modelMatrix = identity<mat4>();
 
@@ -31,23 +35,21 @@ class Mesh {
   vec3 centroid{0};
 
   Mesh() = delete;
-  Mesh(const Geometry&, const Material&);
-  Mesh(const Mesh&) = delete;
-  Mesh(Mesh&&) = default;
+  Mesh(std::shared_ptr<Geometry> geometry, std::shared_ptr<Material> material);
   ~Mesh() = default;
 
-  void translate(vec3 translation);
-  void rotateX(float angle);
-  void rotateY(float angle);
-  void rotateZ(float angle);
-  void scale(float scale);
+  void setPosition(vec3 translation);
+  void setRotationX(float angle);
+  void setRotationY(float angle);
+  void setRotationZ(float angle);
+  void setScale(float scale);
   void update();
 
   vec3 getMin() const;
   vec3 getMax() const;
 
   // Find the distance to the closest intersection, the index of the primitive and the number of BVH tests.
-  // Primitive index and distance to hit is packed into HitRecord (FLT_MAX if no intersection)
+  // Store distance in ray.t  (FLT_MAX if no intersection) and geometry data in hitRecord
   void intersect(Ray& ray, HitRecord& hitRecord, uint& count) const;
 
   // Center geometry at the origin

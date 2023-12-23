@@ -1,3 +1,5 @@
+#pragma once
+
 #include <iostream>
 
 #include "dataTypes.hpp"
@@ -11,15 +13,13 @@ class Scene {
   std::vector<BVHNode> tlas;
 
   Scene() = default;
-  Scene(std::vector<Mesh>&& meshes);
+  Scene(const std::vector<Mesh>& meshes);
   Scene(const Scene& scene) = delete;
   ~Scene() = default;
 
+  void completeScene();
   void generateIndices();
   void generateTLAS();
-
-  void add(const Mesh& mesh) = delete;
-  void remove(const Mesh& mesh) = delete;
 
   uint intersect(Ray& ray, HitRecord& hitRecord, uint& count) const;
 };

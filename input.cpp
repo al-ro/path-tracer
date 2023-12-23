@@ -27,15 +27,15 @@ std::vector<Triangle> loadSTL(std::string path) {
     triangle.centroid = (triangle.v0 + triangle.v1 + triangle.v2) / 3.0f;
   }
 
+  std::cout << "STL triangle count: " << triangles.size() << std::endl;
+
   return triangles;
 }
 
-void loadObj(std::string path,
-             std::vector<vec3>& vertices,
-             std::vector<vec3>& normals,
-             std::vector<vec2>& texCoords) {
+std::vector<Triangle> loadObj(std::string path,
+                              std::vector<vec3>& normals,
+                              std::vector<vec2>& texCoords) {
   tinyobj::ObjReaderConfig reader_config;
-  // reader_config.mtl_search_path = "./models";  // Path to material files
   reader_config.triangulate = true;
 
   tinyobj::ObjReader reader;
@@ -44,12 +44,14 @@ void loadObj(std::string path,
     if (!reader.Error().empty()) {
       std::cerr << "TinyObjReader: " << reader.Error();
     }
-    return;
+    exit(1);
   }
 
   if (!reader.Warning().empty()) {
     std::cout << "TinyObjReader: " << reader.Warning();
   }
+
+  std::vector<vec3> vertices{};
 
   auto& attrib = reader.GetAttrib();
   auto& shapes = reader.GetShapes();
@@ -97,7 +99,18 @@ void loadObj(std::string path,
       shapes[s].mesh.material_ids[f];
     }
   }
-  std::cout << "Model vertex count: " << vertices.size() << std::endl;
+
+  std::vector<Triangle> triangles{};
+  for (int i = 0; i < vertices.size(); i += 3) {
+    triangles.push_back(Triangle{vertices[i], vertices[i + 1], vertices[i + 2]});
+  }
+  for (auto& triangle : triangles) {
+    triangle.centroid = (triangle.v0 + triangle.v1 + triangle.v2) / 3.0f;
+  }
+
+  std::cout << "OBJ triangle count: " << triangles.size() << std::endl;
+
+  return triangles;
 }
 
 // Read in HDR image

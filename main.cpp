@@ -18,6 +18,7 @@
 #include "mesh.hpp"
 #include "output.hpp"
 #include "random.hpp"
+#include "sampleScenes.hpp"
 #include "scene.hpp"
 
 using namespace glm;
@@ -75,19 +76,19 @@ vec3 getIllumination(Ray ray,
     const Mesh& mesh{scene.meshes[meshIdx]};
 
     vec3 p = ray.origin + ray.direction * ray.t;
-    vec3 N = normalize(vec3(mesh.normalMatrix * vec4(mesh.geometry.getNormal(closestHit.hitIndex, closestHit.barycentric), 0.0f)));
+    vec3 N = normalize(vec3(mesh.normalMatrix * vec4(mesh.geometry->getNormal(closestHit.hitIndex, closestHit.barycentric), 0.0f)));
     if (dot(ray.direction, N) > 0.0f) {
       N = -N;
     }
     vec3 V = -ray.direction;
 
-    const float metalness{mesh.material.metalness};
-    const float roughness{mesh.material.roughness};
-    vec2 uv = mesh.geometry.getTexCoord(closestHit.hitIndex, closestHit.barycentric);
-    const vec3 albedo = mesh.material.getAlbedo(uv);
-    const vec3 emissive = mesh.material.getEmissive(uv);
+    const float metalness{mesh.material->metalness};
+    const float roughness{mesh.material->roughness};
+    vec2 uv = mesh.geometry->getTexCoord(closestHit.hitIndex, closestHit.barycentric);
+    const vec3 albedo = mesh.material->getAlbedo(uv);
+    const vec3 emissive = mesh.material->getEmissive(uv);
 
-    vec3 F0 = mix(mesh.material.F0, albedo, metalness);
+    vec3 F0 = mix(mesh.material->F0, albedo, metalness);
 
     //--------------------- Diffuse ------------------------
     vec3 diffuse{0};
@@ -244,10 +245,11 @@ int main(int argc, char** argv) {
   uint bounces{6};
   uint numThreads{10};
   bool renderBVH{false};
+  SampleScene sampleScene{THREE_STL};
 
   // Parse command line arguments
   int opt;
-  while ((opt = getopt(argc, argv, " w:h:s:b:t:a")) != -1) {
+  while ((opt = getopt(argc, argv, " w:h:s:b:t:p:a")) != -1) {
     switch (opt) {
       case 'w':
         width = atoi(optarg);
@@ -269,12 +271,16 @@ int main(int argc, char** argv) {
         numThreads = atoi(optarg);
         continue;
 
+      case 'p':
+        sampleScene = static_cast<SampleScene>(atoi(optarg));
+        continue;
+
       case 'a':
         renderBVH = true;
         continue;
 
       default:
-        std::cout << "Specify -w width, -h height, -s samples, -t threads or -b bounces\n";
+        std::cout << "Specify -w width, -h height, -s samples, -t threads or -b bounces -p preset[0, 2]\n";
         std::cout << "Use -a to render BVH heat map (only main ray, single sample, no jitter)\n";
         break;
     }
@@ -298,60 +304,18 @@ int main(int argc, char** argv) {
       .up = normalize(vec3{0, 1, 0}),
       .fieldOfView = 45.0f};
 
-  // ----- Load model, generate normals and indices ----- //
+  /* Timer */ auto start{std::chrono::steady_clock::now()};
 
-  std::vector<vec3> vertices{};
-  std::vector<vec3> normals{};
-  std::vector<vec2> texCoords{};
-  loadObj("models/viking-room/viking_room.obj", vertices, normals, texCoords);
+  // Scene scene(meshes);
+  std::vector<std::shared_ptr<Geometry>> geometryPool{};
+  std::vector<std::shared_ptr<Material>> materialPool{};
 
-  std::vector<Triangle> triangles{};
-  for (int i = 0; i < vertices.size(); i += 3) {
-    // std::cout << "v0: " << vertices[i] << " v1: " << vertices[i + 1] << " v2: " << vertices[i + 2] << std::endl;
-    Triangle triangle{vertices[i], vertices[i + 1], vertices[i + 2]};
-    triangle.centroid = (triangle.v0 + triangle.v1 + triangle.v2) / 3.0f;
-    triangles.push_back(triangle);
-  }
-
-  VertexAttributes attributes{.normals = normals, .texCoords = texCoords};
-
-  std::vector<Geometry> geometryPool;
-  geometryPool.emplace_back(Geometry{triangles, attributes});
-
-  std::vector<Mesh> meshes;
-
-  Material vikingMaterial = Material(vec3{1}, 0.0f, 0.01f);
-  vikingMaterial.albedoTexture = loadImage("models/viking-room/albedo.png");
-  vikingMaterial.emissiveTexture = loadImage("models/viking-room/emissive.png");
-  vikingMaterial.emissive = vec3{5};
-
-  uint rngState{7142u};
-  bool randomScene{false};
-  if (randomScene) {
-    for (uint i = 0u; i < 512u; i++) {
-      meshes.emplace_back(Mesh{geometryPool[0], vikingMaterial});
-      meshes[i].rotateX(-M_PI);
-      meshes[i].rotateZ(2.0f * M_PI * getRandomFloat(rngState));
-      meshes[i].rotateY(2.0f * M_PI * getRandomFloat(rngState));
-      // meshes[i].scale(getRandomFloat(rngState));
-      meshes[i].center();
-
-      meshes[i].translate(10.0f * (2.0f * getRandomVec3(rngState) - 1.0f));
-    }
-  } else {
-    meshes.emplace_back(Mesh{geometryPool[0], vikingMaterial});
-    meshes[0].rotateY(0.15f * M_PI);
-    meshes[0].rotateX(-0.5f * M_PI);
-
-    // meshes[0].scale(4.0f);
-    meshes[0].center();
-  }
-
-  Scene scene(std::move(meshes));
+  Scene scene{};
+  getScene(sampleScene, scene, geometryPool, materialPool, camera);
 
   // ----- Render geometry_ ----- //
 
-  auto start{std::chrono::steady_clock::now()};
+  /* Timer */ start = std::chrono::steady_clock::now();
 
   std::vector<std::thread> threads(numThreads);
 
@@ -369,8 +333,8 @@ int main(int argc, char** argv) {
     t.join();
   }
 
-  std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - start;
-  std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
+  /* Timer */ std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - start;
+  /* Timer */ std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
   // ----- Output ----- //
 

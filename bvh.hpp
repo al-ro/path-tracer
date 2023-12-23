@@ -193,7 +193,6 @@ void buildBVH(
     uint& rootNodeIdx,
     uint& nodesUsed) {
   BVHNode& root = bvh[rootNodeIdx];
-
   root.leftFirst = 0;
   root.count = primitives.size();
   updateNodeBounds(root, primitives, indices);

@@ -1,7 +1,7 @@
 #include "dataTypes.hpp"
 #include "mesh.hpp"
 
-void intersect(const Ray& ray, const Triangle& triangle, HitRecord& hitRecord);
+inline void intersect(const Ray& ray, const Triangle& triangle, HitRecord& hitRecord);
 float intersect(const Ray& ray, const AABB& aabb);
 float intersect(const Ray& ray, const vec3& aabbMin, const vec3& aabbMax);
 void intersect(Ray& ray, const Mesh& mesh, HitRecord& hitRecord, uint& count);

@@ -2,19 +2,44 @@
 
 This work is in progress.
 
-Basic C++ path tracer with bounding volume hierarchy (BVH) based on [the tutorial series by jbikker](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
+C++ path tracer with bounding volume hierarchy (BVH) based on [the tutorial series by jbikker](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
 
-<p align="center" width="100%">
-    <img src="images/screenshot.png" alt="Screenshot">
-</p>
+Scene 0: 3 instances | BVH heat map (max 267) 0.09 s
+:---:|:---:
+![](images/three_stl.png) | ![](images/three_stl_bvh.png)
+
+
+Scene 1: 10,000 instances | BVH heat map (max 600) 0.32 s
+:---:|:---:
+![](images/scatter_stl.png) | ![](images/scatter_stl_bvh.png)
+
+
+Scene 2: Model with vertex attributes | BVH heat map (max 123) 0.07 s
+:---:|:---:
+![](images/obj.png) | ![](images/obj_bvh.png)
+
+
+- Resolution: 1500 x 800
+- Samples: 320
+- Threads: 10
+- Max bounces: 6
+
+Scene | Render | BVH build | TLAS nodes | Triangles (per model) | BLAS nodes (per model)
+:---:|:---:|:---:|:---:|:---:|:---:|
+0 | 55 s | 0.94 s | 5 | 505,848 | 792,591 
+1 | 494 s | 0.94 s | 19,819 | 505,848 | 792,591 
+2 | 203 s | 0.005 s |  1 | 3,828 | 4899 
+
 
 ["Bust of Menelaus"](https://www.myminifactory.com/object/3d-print-bust-of-menelaus-32197) by Scan The World
+
+["Viking room"](https://sketchfab.com/3d-models/viking-room-a49f1b8e4f5c4ecf9e1fe7d81915ad38) by nigelgoh (edited)
 
 Environment map from [HDR Haven](https://hdri-haven.com/)
 
 ## Features
 
-- BVH construction and traversal
+- BVH (BLAS + TLAS) construction and traversal
 - Cook-Torrance
 - Trowbridge-Reitz (GGX) specular
 - Lambertian diffuse
@@ -36,6 +61,7 @@ Resulting image is output as *output.bmp*
     - *-s* samples per pixel
     - *-b* maximum bounces per ray per sample
     - *-t* number of threads
+    - *-p* preset scene \[0, 2\]
     - *-a* output BVH heatmap (ignores -s and -b)
 
 
@@ -43,6 +69,7 @@ Resulting image is output as *output.bmp*
 
 - [GLM](https://github.com/g-truc/glm) for maths functions and data structures
 - [stb](https://github.com/nothings/stb) for reading and writing images (included in /lib)
-- [stl_reader.h](https://github.com/sreiter/stl_reader) for reading STL files (included in /lib)
+- [stl_reader](https://github.com/sreiter/stl_reader) for reading STL files (included in /lib)
+- [tinyobjloader](https://github.com/tinyobjloader/tinyobjloader) for loading OBJ files (included in /lib)
 - C++17
 - make (optional)

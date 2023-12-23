@@ -10,7 +10,7 @@
 Geometry::Geometry(std::vector<Triangle> primitives,
                    VertexAttributes attributes) : primitives{primitives},
                                                   indices{std::vector<uint>(primitives.size())},
-                                                  normals{std::vector<vec3>(primitives.size())},
+                                                  faceNormals{std::vector<vec3>(primitives.size())},
                                                   attributes{attributes},
                                                   bvh{std::vector<BVHNode>(2 * primitives.size() - 1)} {
   generateIndices();
@@ -57,7 +57,7 @@ void Geometry::generateBVH() {
 
 vec3 Geometry::getNormal(uint idx, vec2 barycentric) const {
   if (attributes.normals.size() == 0) {
-    return normals[idx];
+    return faceNormals[idx];
   }
   vec3 v0 = attributes.normals[3u * idx];
   vec3 v1 = attributes.normals[3u * idx + 1u];
@@ -66,6 +66,9 @@ vec3 Geometry::getNormal(uint idx, vec2 barycentric) const {
 }
 
 vec2 Geometry::getTexCoord(uint idx, vec2 barycentric) const {
+  if (attributes.texCoords.size() <= idx) {
+    return vec2{0};
+  }
   vec2 v0 = attributes.texCoords[3u * idx];
   vec2 v1 = attributes.texCoords[3u * idx + 1u];
   vec2 v2 = attributes.texCoords[3u * idx + 2u];
@@ -84,8 +87,8 @@ void Geometry::generateIndices() {
 }
 
 void Geometry::generateNormals() {
-  for (uint i = 0; i < normals.size(); i++) {
-    normals[i] = calculateNormal(primitives[i]);
+  for (uint i = 0; i < faceNormals.size(); i++) {
+    faceNormals[i] = calculateNormal(primitives[i]);
   }
 }
 
