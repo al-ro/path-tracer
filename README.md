@@ -37,7 +37,7 @@ C++ path tracer with bounding volume hierarchy (BVH) based on [the tutorial seri
 <table width="100%">
   <thead>
     <tr>
-      <th width="50%">Scene2: Model with vertex attributes</th>
+      <th width="50%">Scene 2: Model with vertex attributes</th>
       <th width="50%">BVH heat map (max 123) 0.07 s</th>
     </tr>
   </thead>
