@@ -123,7 +123,10 @@ Image loadEnvironmentImage(std::string path) {
     std::cerr << "Failed to load image " << path << std::endl;
   }
 
-  return Image{static_cast<uint>(width), static_cast<uint>(height), std::vector<vec3>(data, data + width * height)};
+  Image image{static_cast<uint>(width), static_cast<uint>(height), std::vector<vec3>(data, data + width * height)};
+  free(data);
+
+  return image;
 }
 
 Image loadImage(std::string path) {
@@ -139,6 +142,6 @@ Image loadImage(std::string path) {
   for (uint i = 0u; i < rgbData.size(); i++) {
     rgbData[i] = vec3(data[3 * i] / 255.0f, data[3 * i + 1] / 255.0f, data[3 * i + 2] / 255.0f);
   }
-
+  free(data);
   return Image{static_cast<uint>(width), static_cast<uint>(height), rgbData};
 }
