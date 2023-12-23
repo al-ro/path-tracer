@@ -2,7 +2,7 @@
 
 This work is in progress.
 
-Multithreaded C++ path tracer with bounding volume hierarchy (BVH) based on [the tutorial series by jbikker](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
+C++/CUDA path tracer with bounding volume hierarchy (BVH) based on [the tutorial series by jbikker](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
 
 <table width="100%">
   <thead>
@@ -102,4 +102,5 @@ Resulting image is output as *output.bmp*
 - [stl_reader](https://github.com/sreiter/stl_reader) for reading STL files (included in /lib)
 - [tinyobjloader](https://github.com/tinyobjloader/tinyobjloader) for loading OBJ files (included in /lib)
 - C++17
+- CUDA (Nvidia only)
 - make (optional)

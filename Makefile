@@ -1,7 +1,7 @@
 CFLAGS = -std=c++17 -O3
 
 build:
-	g++ $(CFLAGS) -o PathTracer *.cpp
+	nvcc $(CFLAGS) -o PathTracer *.cpp *.cu
 
 .PHONY: run
 
