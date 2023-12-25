@@ -60,6 +60,11 @@ struct VertexAttributes {
   std::vector<vec2> texCoords{};
 };
 
+struct GPUVertexAttributes {
+  vec3* normals;
+  vec2* texCoords;
+};
+
 // Bounding volume hierarchy node
 struct ALIGN(8) BVHNode {
   AABB aabb;
