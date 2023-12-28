@@ -42,7 +42,7 @@ class GPUImage {
   // Device side pointer
   vec3* data;
 
-  GPUImage() = default;
+  GPUImage() = delete;
   GPUImage(const Image& image);
   GPUImage(uint width, uint height);
   GPUImage(uint width, uint height, vec3* data);

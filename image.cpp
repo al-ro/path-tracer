@@ -19,5 +19,5 @@ GPUImage::GPUImage(const Image& image) : width{image.width}, height{image.height
   CHECK_CUDA_ERROR(cudaMemcpy(data, image.data.data(), image.data.size() * sizeof(vec3), cudaMemcpyHostToDevice));
 }
 GPUImage::~GPUImage() {
-  // CHECK_CUDA_ERROR(cudaFree(data));
+  CHECK_CUDA_ERROR(cudaFree(data));
 }

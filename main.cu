@@ -309,26 +309,37 @@ int main(int argc, char** argv) {
       .fieldOfView = 45.0f};
 
   /* Timer */ auto start{std::chrono::steady_clock::now()};
-  /*
-    // Scene scene(meshes);
-    std::vector<std::shared_ptr<Geometry>> geometryPool{};
-    std::vector<std::shared_ptr<Material>> materialPool{};
 
-    Scene scene{};
-    getScene(sampleScene, scene, geometryPool, materialPool, camera);
-  */
+  // Scene scene(meshes);
+  std::vector<std::shared_ptr<Geometry>> geometryPool{};
+  std::vector<std::shared_ptr<Material>> materialPool{};
+
+  Scene scene{};
+  getScene(sampleScene, scene, geometryPool, materialPool, camera);
+
   // ----- Render geometry_ ----- //
 
   /* Timer */ start = std::chrono::steady_clock::now();
 
+  // Make copy of host image
   GPUImage gpuImage{image};
+
+  // Determine number of threads and blocks covering all pixels
   dim3 threadsPerBlock(32, 32);
   dim3 numBlocks((float)(gpuImage.width) / (float)(threadsPerBlock.x), (float)(gpuImage.height) / (float)(threadsPerBlock.y));
-  std::cout << "<<< " << numBlocks.x << " by " << numBlocks.y << ", " << threadsPerBlock.x << " by " << threadsPerBlock.y << ">>>\n";
 
-  getIllumination<<<numBlocks, threadsPerBlock>>>(camera, gpuImage, gpuImage.data);
+  // Device side pointer of the GPUImage. Cannot pass in object itself as destructor calls cudaFree()
+  GPUImage* devicePtr;
+  cudaMalloc(&devicePtr, sizeof(GPUImage));
+  cudaMemcpy(devicePtr, &gpuImage, sizeof(GPUImage), cudaMemcpyHostToDevice);
+  // Call kernel
+  getIllumination<<<numBlocks, threadsPerBlock>>>(camera, devicePtr);
   CHECK_LAST_CUDA_ERROR();
 
+  // Free device side pointer
+  cudaFree(devicePtr);
+
+  // Copy data back to host
   CHECK_CUDA_ERROR(cudaMemcpy(image.data.data(), gpuImage.data, image.data.size() * sizeof(vec3), cudaMemcpyDeviceToHost));
 
   /*
