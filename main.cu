@@ -12,10 +12,12 @@
 #include "brdf.hpp"
 #include "camera.hpp"
 #include "colors.hpp"
+#include "error.hpp"
 #include "geometry.hpp"
 #include "image.hpp"
 #include "input.hpp"
 #include "intersection.hpp"
+#include "kernels.hpp"
 #include "mesh.hpp"
 #include "output.hpp"
 #include "random.hpp"
@@ -307,52 +309,63 @@ int main(int argc, char** argv) {
       .fieldOfView = 45.0f};
 
   /* Timer */ auto start{std::chrono::steady_clock::now()};
+  /*
+    // Scene scene(meshes);
+    std::vector<std::shared_ptr<Geometry>> geometryPool{};
+    std::vector<std::shared_ptr<Material>> materialPool{};
 
-  // Scene scene(meshes);
-  std::vector<std::shared_ptr<Geometry>> geometryPool{};
-  std::vector<std::shared_ptr<Material>> materialPool{};
-
-  Scene scene{};
-  getScene(sampleScene, scene, geometryPool, materialPool, camera);
-
+    Scene scene{};
+    getScene(sampleScene, scene, geometryPool, materialPool, camera);
+  */
   // ----- Render geometry_ ----- //
 
   /* Timer */ start = std::chrono::steady_clock::now();
 
-  std::vector<std::thread> threads(numThreads);
+  GPUImage gpuImage{image};
+  dim3 threadsPerBlock(32, 32);
+  dim3 numBlocks((float)(gpuImage.width) / (float)(threadsPerBlock.x), (float)(gpuImage.height) / (float)(threadsPerBlock.y));
+  std::cout << "<<< " << numBlocks.x << " by " << numBlocks.y << ", " << threadsPerBlock.x << " by " << threadsPerBlock.y << ">>>\n";
 
-  // Launch threads
-  for (uint i = 0u; i < numThreads; i++) {
-    threads[i] = std::thread(render,
-                             std::ref(scene),
-                             std::ref(camera),
-                             std::ref(image),
-                             samples, bounces, renderBVH, i);
-  }
+  getIllumination<<<numBlocks, threadsPerBlock>>>(camera, gpuImage, gpuImage.data);
+  CHECK_LAST_CUDA_ERROR();
 
-  // Wait for all threads to finish
-  for (auto& t : threads) {
-    t.join();
-  }
+  CHECK_CUDA_ERROR(cudaMemcpy(image.data.data(), gpuImage.data, image.data.size() * sizeof(vec3), cudaMemcpyDeviceToHost));
 
-  /* Timer */ std::chrono::duration<double> duration = std::chrono::steady_clock::now() - start;
-  /* Timer */ std::cout << "\nRender time: " << std::floor(duration.count() * 1e4f) / 1e4f << " s\n";
+  /*
+    std::vector<std::thread> threads(numThreads);
+
+    // Launch threads
+    for (uint i = 0u; i < numThreads; i++) {
+      threads[i] = std::thread(render,
+                               std::ref(scene),
+                               std::ref(camera),
+                               std::ref(image),
+                               samples, bounces, renderBVH, i);
+    }
+
+    // Wait for all threads to finish
+    for (auto& t : threads) {
+      t.join();
+    }
+  */
+  /* Timer */ std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - start;
+  /* Timer */ std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
   // ----- Output ----- //
+  /*
+    if (renderBVH) {
+      vec3 maxElement = *std::max_element(image.data.begin(), image.data.end(), [](vec3& a, vec3& b) { return a.x < b.x; });
+      std::cout << "Maximum BVH tests: " << maxElement.x << std::endl;
 
-  if (renderBVH) {
-    vec3 maxElement = *std::max_element(image.data.begin(), image.data.end(), [](vec3& a, vec3& b) { return a.x < b.x; });
-    std::cout << "Maximum BVH tests: " << maxElement.x << std::endl;
+      float inverseMaxElement = 1.0f / maxElement.x;
 
-    float inverseMaxElement = 1.0f / maxElement.x;
-
-    for (vec3& p : image.data) {
-      if (p.x > 0.0f) {
-        p = afmhot(p.x * inverseMaxElement);
+      for (vec3& p : image.data) {
+        if (p.x > 0.0f) {
+          p = afmhot(p.x * inverseMaxElement);
+        }
       }
     }
-  }
-
+*/
   outputToFile(image);
 
   return EXIT_SUCCESS;
