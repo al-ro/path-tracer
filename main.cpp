@@ -50,9 +50,9 @@ float dot_c(const vec3& a, const vec3& b) {
 }
 
 vec3 getEnvironment(const vec3& direction) {
-  uint u = environment.width * atan2f(direction.z, direction.x) * INV2PI - 0.5f;
-  uint v = environment.height * acosf(direction.y) * INVPI - 0.5f;
-  uint idx = min(u + v * environment.width, (uint)(environment.data.size()) - 1);
+  uint u = environment.width * (atan2f(direction.z, direction.x) * INV2PI + 0.5f);
+  uint v = environment.height * acosf(direction.y) * INVPI;
+  uint idx = min(environment.width * v + u, (uint)(environment.data.size()) - 1);
 
   return 0.5f * environment[idx];
 }
