@@ -14,10 +14,10 @@
 #include "colors.hpp"
 #include "error.hpp"
 #include "geometry.hpp"
+#include "gpuRender.hpp"
 #include "image.hpp"
 #include "input.hpp"
 #include "intersection.hpp"
-#include "kernels.hpp"
 #include "mesh.hpp"
 #include "output.hpp"
 #include "random.hpp"
@@ -326,18 +326,27 @@ int main(int argc, char** argv) {
 
   // Determine number of threads and blocks covering all pixels
   dim3 threadsPerBlock(32, 32);
-  dim3 numBlocks((float)(gpuImage.width) / (float)(threadsPerBlock.x), (float)(gpuImage.height) / (float)(threadsPerBlock.y));
+  dim3 numBlocks(ceil((float)(gpuImage.width) / (float)(threadsPerBlock.x)),
+                 ceil((float)(gpuImage.height) / (float)(threadsPerBlock.y)));
 
   // Device side pointer of the GPUImage. Cannot pass in object itself as destructor calls cudaFree()
-  GPUImage* devicePtr;
-  cudaMalloc(&devicePtr, sizeof(GPUImage));
-  cudaMemcpy(devicePtr, &gpuImage, sizeof(GPUImage), cudaMemcpyHostToDevice);
+  GPUImage* imageDevicePtr;
+  CHECK_CUDA_ERROR(cudaMalloc(&imageDevicePtr, sizeof(GPUImage)));
+  CHECK_CUDA_ERROR(cudaMemcpy(imageDevicePtr, &gpuImage, sizeof(GPUImage), cudaMemcpyHostToDevice));
+
+  // Copy environment
+  GPUImage gpuEnvironment{environment};
+  GPUImage* environmentDevicePtr;
+  CHECK_CUDA_ERROR(cudaMalloc(&environmentDevicePtr, sizeof(GPUImage)));
+  CHECK_CUDA_ERROR(cudaMemcpy(environmentDevicePtr, &gpuEnvironment, sizeof(GPUImage), cudaMemcpyHostToDevice));
+
   // Call kernel
-  getIllumination<<<numBlocks, threadsPerBlock>>>(camera, devicePtr);
+  render<<<numBlocks, threadsPerBlock>>>(camera, imageDevicePtr, environmentDevicePtr);
   CHECK_LAST_CUDA_ERROR();
 
-  // Free device side pointer
-  cudaFree(devicePtr);
+  // Free device side pointers
+  CHECK_CUDA_ERROR(cudaFree(imageDevicePtr));
+  CHECK_CUDA_ERROR(cudaFree(environmentDevicePtr));
 
   // Copy data back to host
   CHECK_CUDA_ERROR(cudaMemcpy(image.data.data(), gpuImage.data, image.data.size() * sizeof(vec3), cudaMemcpyDeviceToHost));

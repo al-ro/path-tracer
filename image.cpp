@@ -12,7 +12,7 @@ Image::Image(uint width, uint height) : width{width}, height{height}, data{std::
 // Device image
 GPUImage::GPUImage(uint width, uint height, vec3* data) : width{width}, height{height}, data{data} {}
 GPUImage::GPUImage(uint width, uint height) : width{width}, height{height} {
-  CHECK_CUDA_ERROR(cudaMalloc((void**)&data, width * height));
+  CHECK_CUDA_ERROR(cudaMalloc((void**)&data, width * height * sizeof(vec3)));
 }
 GPUImage::GPUImage(const Image& image) : width{image.width}, height{image.height} {
   CHECK_CUDA_ERROR(cudaMalloc((void**)&data, image.data.size() * sizeof(vec3)));
