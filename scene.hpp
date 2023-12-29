@@ -23,3 +23,17 @@ class Scene {
 
   uint intersect(Ray& ray, HitRecord& hitRecord, uint& count) const;
 };
+
+class GPUScene {
+ public:
+  GPUMesh* meshes;
+  uint* indices;
+  BVHNode* tlas;
+
+  GPUScene() = delete;
+  GPUScene(const Scene& scene);
+  GPUScene(const GPUScene& scene) = delete;
+  ~GPUScene();
+
+  __device__ uint intersect(Ray& ray, HitRecord& hitRecord, uint& count) const;
+};

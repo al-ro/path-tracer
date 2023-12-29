@@ -3,7 +3,7 @@
 #include <chrono>
 
 #include "bvh.hpp"
-#include "intersection.hpp"
+#include "error.hpp"
 
 Scene::Scene(const std::vector<Mesh>& meshes) : meshes{meshes},
                                                 tlas{std::vector<BVHNode>(2.0 * meshes.size() - 1)},
@@ -52,3 +52,27 @@ void Scene::generateIndices() {
 uint Scene::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
   return intersectTLAS(ray, tlas, meshes, hitRecord, count);
 }
+
+GPUScene::GPUScene(const Scene& scene) {
+  /*
+
+  TODO:
+    Create GPUMesh from Mesh data
+      Create GPUGeometry from Geometry data
+
+  CHECK_CUDA_ERROR(cudaMalloc((void**)&meshes, scene.meshes.size() * sizeof(GPUMesh)));
+  CHECK_CUDA_ERROR(cudaMemcpy(meshes, scene.meshes.data(), scene.meshes.size() * sizeof(GPUMesh), cudaMemcpyHostToDevice));
+*/
+  CHECK_CUDA_ERROR(cudaMalloc((void**)&tlas, scene.tlas.size() * sizeof(BVHNode)));
+  CHECK_CUDA_ERROR(cudaMemcpy(tlas, scene.tlas.data(), scene.tlas.size() * sizeof(BVHNode), cudaMemcpyHostToDevice));
+
+  CHECK_CUDA_ERROR(cudaMalloc((void**)&indices, scene.indices.size() * sizeof(Mesh)));
+  CHECK_CUDA_ERROR(cudaMemcpy(indices, scene.indices.data(), scene.indices.size() * sizeof(uint), cudaMemcpyHostToDevice));
+}
+GPUScene::~GPUScene() {
+  // CHECK_CUDA_ERROR(cudaFree(meshes));
+  CHECK_CUDA_ERROR(cudaFree(tlas));
+  CHECK_CUDA_ERROR(cudaFree(indices));
+}
+
+__device__ uint GPUScene::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {}

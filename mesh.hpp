@@ -55,3 +55,24 @@ class Mesh {
   // Center geometry at the origin
   void center();
 };
+
+class GPUMesh {
+ public:
+  // Reference to an externally managed complete Geometry.
+  Geometry* geometry;
+
+  // Reference to an externally managed Material.
+  Material* material;
+
+  // Inverse of the model matrix to transform rays
+  mat4 invModelMatrix = identity<mat4>();
+  mat4 normalMatrix = transpose(invModelMatrix);
+
+  GPUMesh() = delete;
+  GPUMesh(const Mesh& mesh);
+  ~GPUMesh() = default;
+
+  // Find the distance to the closest intersection, the index of the primitive and the number of BVH tests.
+  // Store distance in ray.t  (FLT_MAX if no intersection) and geometry data in hitRecord
+  __device__ void intersect(Ray& ray, HitRecord& hitRecord, uint& count) const;
+};
