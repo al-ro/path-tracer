@@ -344,19 +344,19 @@ int main(int argc, char** argv) {
   /* Timer */ std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
   // ----- Output ----- //
-  /*
-    if (renderBVH) {
-      vec3 maxElement = *std::max_element(image.data.begin(), image.data.end(), [](vec3& a, vec3& b) { return a.x < b.x; });
-      std::cout << "Maximum BVH tests: " << maxElement.x << std::endl;
 
-      float inverseMaxElement = 1.0f / maxElement.x;
+  if (renderBVH) {
+    vec3 maxElement = *std::max_element(image.data.begin(), image.data.end(), [](vec3& a, vec3& b) { return a.x < b.x; });
+    std::cout << "Maximum BVH tests: " << maxElement.x << std::endl;
 
-      for (vec3& p : image.data) {
-        if (p.x > 0.0f) {
-          p = afmhot(p.x * inverseMaxElement);
-        }
+    float inverseMaxElement = 1.0f / maxElement.x;
+
+    for (vec3& p : image.data) {
+      if (p.x > 0.0f) {
+        p = afmhot(p.x * inverseMaxElement);
       }
-    }*/
+    }
+  }
 
   outputToFile(image);
 

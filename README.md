@@ -4,62 +4,6 @@ This work is in progress.
 
 C++/CUDA path tracer with bounding volume hierarchy (BVH) based on [the tutorial series by jbikker](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
 
-<table width="100%">
-  <thead>
-    <tr>
-      <th width="50%">Scene 0: 3 instances</th>
-      <th width="50%">BVH heat map (max 267) 0.08 s</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td width="50%"><img src="images/three_stl.png"/></td>
-      <td width="50%"><img src="images/three_stl_bvh.png"/></td>
-    </tr>
-  </tbody>
-</table>
-
-<table width="100%">
-  <thead>
-    <tr>
-      <th width="50%">Scene 1: 10,000 instances</th>
-      <th width="50%">BVH heat map (max 600) 0.26 s</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td width="50%"><img src="images/scatter_stl.png"/></td>
-      <td width="50%"><img src="images/scatter_stl_bvh.png"/></td>
-    </tr>
-  </tbody>
-</table>
-
-<table width="100%">
-  <thead>
-    <tr>
-      <th width="50%">Scene 2: Model with vertex attributes</th>
-      <th width="50%">BVH heat map (max 123) 0.07 s</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td width="50%"><img src="images/obj.png"/></td>
-      <td width="50%"><img src="images/obj_bvh.png"/></td>
-    </tr>
-  </tbody>
-</table>
-
-- Resolution: 1500 x 800
-- Samples: 320
-- Threads: 10
-- Max bounces: 6
-
-Scene | Render | BVH build | TLAS nodes | Triangles (per model) | BLAS nodes (per model)
-:---:|:---:|:---:|:---:|:---:|:---:|
-0 | 36 s | 0.88 s | 5 | 505,848 | 792,591 
-1 | 269 s | 0.88 s | 19,819 | 505,848 | 792,591 
-2 | 107 s | 0.005 s |  1 | 3,828 | 4899 
-
 
 ["Bust of Menelaus"](https://www.myminifactory.com/object/3d-print-bust-of-menelaus-32197) by Scan The World
 
