@@ -5,6 +5,8 @@
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #define GLM_ENABLE_EXPERIMENTAL
 
+#include <cuda_runtime_api.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/rotate_vector.hpp>
@@ -50,8 +52,8 @@ struct Triangle {
   vec3 v2{};
   // Location for spatial sorting
   vec3 centroid{FLT_MAX};
-  inline vec3 getMin() const { return min(min(v0, v1), v2); }
-  inline vec3 getMax() const { return max(max(v0, v1), v2); }
+  __host__ __device__ inline vec3 getMin() const { return min(min(v0, v1), v2); }
+  __host__ __device__ inline vec3 getMax() const { return max(max(v0, v1), v2); }
 };
 
 // Per-vertex normals and texture coordinates
@@ -60,13 +62,8 @@ struct VertexAttributes {
   std::vector<vec2> texCoords{};
 };
 
-struct GPUVertexAttributes {
-  vec3* normals;
-  vec2* texCoords;
-};
-
-// Bounding volume hierarchy node
-struct ALIGN(8) BVHNode {
+/* Bounding volume hierarchy node */
+struct BVHNode {
   AABB aabb;
   // Index of first primitive or left child
   uint leftFirst;
@@ -123,10 +120,6 @@ inline std::ostream& operator<<(std::ostream& os, const mat4x4& m) {
   return os;
 }
 
-inline float dot_c(const vec3& a, const vec3& b) {
-  return max(dot(a, b), 1e-5f);
-}
-
 template <typename T>
 void inline reorder(std::vector<T>& values, const std::vector<uint>& order, const uint size = 1u) {
   std::vector<T> reorderedValues(values.size());
@@ -136,4 +129,7 @@ void inline reorder(std::vector<T>& values, const std::vector<uint>& order, cons
     }
   }
   values = reorderedValues;
+}
+__host__ __device__ inline float dot_c(const vec3& a, const vec3& b) {
+  return max(dot(a, b), 1e-5f);
 }

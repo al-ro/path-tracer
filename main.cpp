@@ -321,7 +321,7 @@ int main(int argc, char** argv) {
 
   /* Timer */ start = std::chrono::steady_clock::now();
 
-  renderGPU(scene, camera, image, environment, samples, bounces, renderBVH);
+  renderGPU(scene, geometryPool, materialPool, camera, image, environment, samples, bounces, renderBVH);
 
   /*
     std::vector<std::thread> threads(numThreads);
@@ -356,8 +356,8 @@ int main(int argc, char** argv) {
           p = afmhot(p.x * inverseMaxElement);
         }
       }
-    }
-*/
+    }*/
+
   outputToFile(image);
 
   return EXIT_SUCCESS;

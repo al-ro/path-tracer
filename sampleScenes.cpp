@@ -105,7 +105,7 @@ void getScene(SampleScene sampleScene,
 
     case OBJ: {
       // Camera
-      camera.position = 1.0f * vec3{0.5f, 0.35f, -1.0f};
+      camera.position = 10.0f * vec3{0.5f, 0.35f, -1.0f};
       camera.target = vec3{0};
       camera.up = normalize(vec3{0, 1, 0});
       camera.fieldOfView = 45.0f;

@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "bvh.hpp"
+#include "error.hpp"
 #include "intersection.hpp"
 
 Geometry::Geometry(std::vector<Triangle> primitives,
@@ -104,4 +105,47 @@ void Geometry::generateNormals() {
 
 void Geometry::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
   intersectBVH(ray, bvh, primitives, 0, hitRecord, count);
+}
+
+GPUGeometry::GPUGeometry(const Geometry& geometry) {
+  CHECK_CUDA_ERROR(cudaMalloc((void**)&primitives, geometry.primitives.size() * sizeof(Triangle)));
+  CHECK_CUDA_ERROR(cudaMemcpy(primitives, geometry.primitives.data(), geometry.primitives.size() * sizeof(Triangle), cudaMemcpyHostToDevice));
+
+  CHECK_CUDA_ERROR(cudaMalloc((void**)&indices, geometry.indices.size() * sizeof(uint)));
+  CHECK_CUDA_ERROR(cudaMemcpy(indices, geometry.indices.data(), geometry.indices.size() * sizeof(uint), cudaMemcpyHostToDevice));
+
+  CHECK_CUDA_ERROR(cudaMalloc((void**)&bvh, geometry.bvh.size() * sizeof(BVHNode)));
+  CHECK_CUDA_ERROR(cudaMemcpy(bvh, geometry.bvh.data(), geometry.bvh.size() * sizeof(BVHNode), cudaMemcpyHostToDevice));
+
+  if (geometry.attributes.normals.size() > 0.0) {
+    hasNormals = true;
+    CHECK_CUDA_ERROR(cudaMalloc((void**)&vertexNormals, geometry.attributes.normals.size() * sizeof(vec3)));
+    CHECK_CUDA_ERROR(cudaMemcpy(vertexNormals, geometry.attributes.normals.data(), geometry.attributes.normals.size() * sizeof(vec3), cudaMemcpyHostToDevice));
+
+  } else {
+    CHECK_CUDA_ERROR(cudaMalloc((void**)&faceNormals, geometry.faceNormals.size() * sizeof(vec3)));
+    CHECK_CUDA_ERROR(cudaMemcpy(faceNormals, geometry.faceNormals.data(), geometry.faceNormals.size() * sizeof(vec3), cudaMemcpyHostToDevice));
+  }
+
+  if (geometry.attributes.texCoords.size() > 0.0) {
+    hasTexCoords = true;
+    CHECK_CUDA_ERROR(cudaMalloc((void**)&texCoords, geometry.attributes.texCoords.size() * sizeof(vec2)));
+    CHECK_CUDA_ERROR(cudaMemcpy(texCoords, geometry.attributes.texCoords.data(), geometry.attributes.texCoords.size() * sizeof(vec2), cudaMemcpyHostToDevice));
+  }
+}
+
+GPUGeometry::~GPUGeometry() {
+  CHECK_CUDA_ERROR(cudaFree(primitives));
+  CHECK_CUDA_ERROR(cudaFree(indices));
+  CHECK_CUDA_ERROR(cudaFree(bvh));
+
+  if (hasNormals) {
+    CHECK_CUDA_ERROR(cudaFree(vertexNormals));
+  } else {
+    CHECK_CUDA_ERROR(cudaFree(faceNormals));
+  }
+
+  if (hasTexCoords) {
+    CHECK_CUDA_ERROR(cudaFree(texCoords));
+  }
 }

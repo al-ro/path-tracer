@@ -31,9 +31,11 @@ class GPUScene {
   BVHNode* tlas;
 
   GPUScene() = delete;
-  GPUScene(const Scene& scene);
+  GPUScene(const Scene& scene, const std::vector<GPUMesh>& gpuMeshes);
+  // Disallow copies for objects managing GPU memory
   GPUScene(const GPUScene& scene) = delete;
   ~GPUScene();
-
-  __device__ uint intersect(Ray& ray, HitRecord& hitRecord, uint& count) const;
+  __device__ uint intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
+    return intersectTLAS(ray, tlas, meshes, indices, hitRecord, count);
+  }
 };

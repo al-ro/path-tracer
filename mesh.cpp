@@ -1,7 +1,5 @@
 #include "mesh.hpp"
 
-#include <iostream>
-
 Mesh::Mesh(std::shared_ptr<Geometry> geometry, std::shared_ptr<Material> material) : geometry{geometry}, material{material} {
   update();
 }
@@ -67,7 +65,7 @@ void Mesh::setScale(float scale) {
   update();
 }
 
-void Mesh::center() {
+void Mesh::centerGeometry() {
   translation = -geometry->centroid;
   update();
 }
@@ -80,17 +78,7 @@ vec3 Mesh::getMax() const {
   return aabbMax;
 }
 
-GPUMesh::GPUMesh(const Mesh& mesh) : invModelMatrix{mesh.invModelMatrix}, normalMatrix{mesh.invModelMatrix} {
-  // Somehow get external Geometry and Material
-}
-
-__device__ void GPUMesh::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
-  Ray transformedRay = ray;
-  transformedRay.origin = invModelMatrix * vec4(ray.origin, 1.0f);
-  // Not normalized to handle scale transform
-  transformedRay.direction = invModelMatrix * vec4(ray.direction, 0.0f);
-  transformedRay.invDirection = 1.0f / transformedRay.direction;
-
-  geometry->intersect(transformedRay, hitRecord, count);
-  ray.t = transformedRay.t;
-}
+GPUMesh::GPUMesh(const Mesh& mesh, GPUGeometry* geometry, GPUMaterial* material) : invModelMatrix{mesh.invModelMatrix},
+                                                                                   normalMatrix{mesh.invModelMatrix},
+                                                                                   geometry{geometry},
+                                                                                   material{material} {}

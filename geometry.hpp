@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cuda_runtime_api.h>
+
 #include <vector>
 
 #include "dataTypes.hpp"
@@ -17,10 +19,8 @@ class Geometry {
   vec3 centroid{0};
 
   Geometry() = delete;
-  Geometry(const Geometry&) = delete;
-
   Geometry(std::vector<Triangle> primitives, VertexAttributes attributes = VertexAttributes{});
-
+  Geometry(const Geometry& geometry) = delete;
   Geometry(Geometry&&) = default;
   ~Geometry() = default;
 
@@ -32,4 +32,32 @@ class Geometry {
   void generateBVH();
   // Find the distance to the closest intersection, the index of the primitive and the number of BVH tests.
   void intersect(Ray& ray, HitRecord& hitRecord, uint& count) const;
+};
+
+class GPUGeometry {
+ public:
+  Triangle* primitives;
+  uint* indices;
+  vec3* faceNormals;
+  vec3* vertexNormals;
+  vec2* texCoords;
+  BVHNode* bvh;
+
+  bool hasNormals{false};
+  bool hasTexCoords{false};
+
+  GPUGeometry() = delete;
+  GPUGeometry(const Geometry& geometry);
+  // Delete copy constructor as the object manages its data on the GPU
+  GPUGeometry(const GPUGeometry& geometry) = delete;
+  GPUGeometry(GPUGeometry&& geometry) = default;
+
+  ~GPUGeometry();
+
+  __device__ vec2 getTexCoord(uint idx, vec2 barycentric) const;
+
+  __device__ vec3 getNormal(uint idx, vec2 barycentric) const;
+
+  // Find the distance to the closest intersection, the index of the primitive and the number of BVH tests.
+  __device__ void intersect(Ray& ray, HitRecord& hitRecord, uint& count) const;
 };
