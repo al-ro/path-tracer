@@ -1,4 +1,4 @@
-CFLAGS = -std=c++17 -g -G
+CFLAGS = -std=c++17 -O3
 
 build:
 	nvcc -arch=sm_80 $(CFLAGS) *.cpp *.cu -o PathTracer -diag-suppress 20012

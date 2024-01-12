@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <chrono>
+
 #include "brdf.hpp"
 #include "error.hpp"
 #include "gpuRender.hpp"
@@ -44,9 +47,26 @@ __device__ void GPUMesh::intersect(Ray& ray, HitRecord& hitRecord, uint& count) 
   ray.t = transformedRay.t;
 }
 
+//-------------------------------- Rotations --------------------------------
+
+__device__ inline vec3 rotate(vec3 p, vec4 q) {
+  return 2.0f * cross(vec3(q), p * q.w + cross(vec3(q), p)) + p;
+}
+__device__ inline vec3 rotateX(vec3 p, float angle) {
+  return rotate(p, vec4(sin(angle / 2.0), 0.0, 0.0, cos(angle / 2.0)));
+}
+__device__ inline vec3 rotateY(vec3 p, float angle) {
+  return rotate(p, vec4(0.0, sin(angle / 2.0), 0.0, cos(angle / 2.0)));
+}
+__device__ inline vec3 rotateZ(vec3 p, float angle) {
+  return rotate(p, vec4(0.0, 0.0, sin(angle / 2.0), cos(angle / 2.0)));
+}
+
 __device__ vec3 getEnvironment(const GPUImage* environment, const vec3& direction) {
-  uint u = environment->width * (atan2f(direction.z, direction.x) * INV2PI + 0.5f);
-  uint v = environment->height * acosf(direction.y) * INVPI;
+  // Rotate environment map
+  vec3 sampleDir = normalize(rotateY(direction, -M_PI));
+  uint u = environment->width * (atan2f(sampleDir.z, sampleDir.x) * INV2PI + 0.5f);
+  uint v = environment->height * acosf(sampleDir.y) * INVPI;
   uint idx = min(u + v * environment->width, (environment->width * environment->height) - 1);
 
   return 0.5f * (*environment)[idx];
@@ -54,100 +74,96 @@ __device__ vec3 getEnvironment(const GPUImage* environment, const vec3& directio
 
 __device__ vec3 getIllumination(Ray& ray, const GPUScene* scene, const GPUImage* environment,
                                 uint& rngState, int& bounceCount, uint& testCount) {
-  bounceCount--;
-  if (bounceCount <= 0) {
-    return vec3{0};
-  }
-  vec3 col{0};
+  // Initialize light to white and track attenuation
+  vec3 col{1};
 
-  HitRecord closestHit{};
+  for (uint i = 0; i < bounceCount; i++) {
+    HitRecord closestHit{};
+    uint meshIdx = scene->intersect(ray, closestHit, testCount);
 
-  uint meshIdx = scene->intersect(ray, closestHit, testCount);
+    if (ray.t < FLT_MAX) {
+      const GPUMesh& mesh{scene->meshes[meshIdx]};
 
-  if (ray.t < FLT_MAX) {
-    const GPUMesh& mesh{scene->meshes[meshIdx]};
+      vec3 p = ray.origin + ray.direction * ray.t;
+      vec3 N = normalize(vec3(mesh.normalMatrix * vec4(mesh.geometry->getNormal(closestHit.hitIndex, closestHit.barycentric), 0.0f)));
+      if (dot(ray.direction, N) > 0.0f) {
+        N = -N;
+      }
 
-    vec3 p = ray.origin + ray.direction * ray.t;
-    vec3 N = normalize(vec3(mesh.normalMatrix * vec4(mesh.geometry->getNormal(closestHit.hitIndex, closestHit.barycentric), 0.0f)));
-    if (dot(ray.direction, N) > 0.0f) {
-      N = -N;
-    }
+      const float metalness{mesh.material->metalness};
+      const float roughness{mesh.material->roughness};
+      vec2 uv = mesh.geometry->getTexCoord(closestHit.hitIndex, closestHit.barycentric);
+      const vec3 albedo = mesh.material->getAlbedo(uv);
+      const vec3 emissive = mesh.material->getEmissive(uv);
 
-    vec3 V = -ray.direction;
+      vec3 F0 = mix(mesh.material->F0, albedo, metalness);
 
-    const float metalness{mesh.material->metalness};
-    const float roughness{mesh.material->roughness};
-    vec2 uv = mesh.geometry->getTexCoord(closestHit.hitIndex, closestHit.barycentric);
-    const vec3 albedo = mesh.material->getAlbedo(uv);
-    const vec3 emissive = mesh.material->getEmissive(uv);
+      vec3 sampleDir{};
+      vec3 localCol{};
 
-    vec3 F0 = mix(mesh.material->F0, albedo, metalness);
+      //--------------------- Specular ------------------------
 
-    //--------------------- Diffuse ------------------------
-    vec3 diffuse{0};
-    if (metalness < 1.0f) {
       vec2 Xi = getRandomVec2(rngState);
+      // Get a random halfway vector around the surface normal (in world space)
+      vec3 H = importanceSampleGGX(Xi, N, roughness);
 
-      vec3 sampleDir = importanceSampleCosine(Xi, N);
-      Ray sampleRay{p, sampleDir, 1.0f / sampleDir, FLT_MAX};
-      sampleRay.origin += 1e-4f * N;
+      vec3 V = -ray.direction;
+
+      // Generate sample direction as view ray reflected around h (note sign)
+      sampleDir = normalize(reflect(-V, H));
+
+      float NdotL = dot_c(N, sampleDir);
+      float NdotV = dot_c(N, V);
+      float NdotH = dot_c(N, H);
+      float VdotH = dot_c(V, H);
+
+      vec3 F = fresnel(VdotH, F0);
+      float G = smiths(NdotV, NdotL, roughness);
 
       /*
-          The discrete Riemann sum for the lighting equation is
-          1/N * Σ(brdf(l, v) * L(l) * dot(l, n)) / pdf(l))
-          Lambertian BRDF is c/PI and the pdf for cosine sampling is dot(l, n)/PI
-          PI term and dot products cancel out leaving just c * L(l)
+
+          The following can be simplified as the D term and many dot products cancel out
+
+          float D = distribution(NdotH, roughness);
+
+          // Cook-Torrance BRDF
+          vec3 brdfS = D * F * G / max(0.0001, (4.0 * NdotV * NdotL));
+
+          float pdfSpecular = (D * NdotH) / (4.0 * VdotH);
+          vec3 specular = (L(sampleDir) * brdfS * NdotL) / pdfSpecular;
+
       */
-      diffuse = albedo * getIllumination(sampleRay, scene, environment, rngState, bounceCount, testCount);
+
+      // Simplified from the above
+
+      localCol = (F * G * VdotH) / (NdotV * NdotH);
+
+      if (metalness < 1.0f && getRandomFloat(rngState) > F.x) {
+        //--------------------- Diffuse ------------------------
+        vec2 Xi = getRandomVec2(rngState);
+        vec3 kD = (1.0f - F) * (1.0f - metalness);
+
+        sampleDir = mix(sampleDir, importanceSampleCosine(Xi, N), kD.x);
+
+        /*
+            The discrete Riemann sum for the lighting equation is
+            1/N * Σ(brdf(l, v) * L(l) * dot(l, n)) / pdf(l))
+            Lambertian BRDF is c/PI and the pdf for cosine sampling is dot(l, n)/PI
+            PI term and dot products cancel out leaving just c * L(l)
+        */
+        localCol += kD * albedo;
+      }
+
+      col *= localCol;
+      col += emissive;
+      ray = Ray{p + 1e-4f * N, sampleDir, 1.0f / sampleDir, FLT_MAX};
+    } else {
+      col *= getEnvironment(environment, ray.direction);
+      return col;
     }
-
-    //--------------------- Specular ------------------------
-
-    vec2 Xi = getRandomVec2(rngState);
-    // Get a random halfway vector around the surface normal (in world space)
-    vec3 H = importanceSampleGGX(Xi, N, roughness);
-
-    // Generate sample direction as view ray reflected around h (note sign)
-    vec3 sampleDir = normalize(reflect(-V, H));
-
-    float NdotL = dot_c(N, sampleDir);
-    float NdotV = dot_c(N, V);
-    float NdotH = dot_c(N, H);
-    float VdotH = dot_c(V, H);
-
-    vec3 F = fresnel(VdotH, F0);
-    float G = smiths(NdotV, NdotL, roughness);
-
-    /*
-
-        The following can be simplified as the D term and many dot products cancel out
-
-        float D = distribution(NdotH, roughness);
-
-        // Cook-Torrance BRDF
-        vec3 brdfS = D * F * G / max(0.0001, (4.0 * NdotV * NdotL));
-
-        float pdfSpecular = (D * NdotH) / (4.0 * VdotH);
-        vec3 specular = (L(sampleDir) * brdfS * NdotL) / pdfSpecular;
-
-    */
-
-    // Simplified from the above
-
-    Ray sampleRay{p, sampleDir, 1.0f / sampleDir, FLT_MAX};
-    sampleRay.origin += 1e-4f * N;
-
-    vec3 specular = (getIllumination(sampleRay, scene, environment, rngState, bounceCount, testCount) * F * G * VdotH) / (NdotV * NdotH);
-
-    // Combine diffuse and specular
-    vec3 kD = (1.0f - F) * (1.0f - metalness);
-    col = emissive + specular + kD * diffuse;  // (1.0-metalness) * (1.0-fresnel(NdotL, F0))*(1.0-fresnel(NdotV, F0));
-
-  } else {
-    col = getEnvironment(environment, ray.direction);
   }
 
-  return col;
+  return vec3(0);
 }
 
 __global__ void printTLAS(GPUScene* scene, uint size) {
@@ -172,41 +188,46 @@ __global__ void render(GPUScene* scene, Camera camera, GPUImage* image, GPUImage
 
   uint idx = (uint)(fragCoord.y) * image->width + (uint)(fragCoord.x);
 
-  Ray ray{};
   vec2 resolution{image->width, image->height};
-
-  ray.direction = rayDirection(resolution, camera.fieldOfView, fragCoord);
-  ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
-  ray.invDirection = 1.0f / ray.direction;
-  ray.t = FLT_MAX;
-
   vec3 col{0};
-  uint rngState{1031};
+  uint rngState{1023u + idx};
 
-  uint bvhTests = 0u;
-  if (renderBVH) {
-    HitRecord closestHit{};
-    // Get number of BVH tests for primary ray
-    scene->intersect(ray, closestHit, bvhTests);
-    (*image)[idx] = vec3(bvhTests);
-  } else {
-    // Path trace scene
-    int bounces = maxBounces;
-    col += getIllumination(ray, scene, environment, rngState, bounces, bvhTests);
-  }
-  /*
-    if (!renderBVH) {
-      // Average result
-      col /= samples;
-      // Tonemapping
-      col *= 1.0f - vec3{expf(-col.r), expf(-col.g), expf(-col.b)};
-      // Gamma correction
-      col = pow(col, vec3{1.0f / 2.2f});
-      // Output data
-      (*image)[idx] = col;
+  for (uint s = 0u; s < (renderBVH ? 1u : samples); s++) {
+    vec2 fC = fragCoord;
+    if (!renderBVH && samples > 1u) {
+      // Jitter position for antialiasing
+      fC += 0.5f * (2.0f * getRandomVec2(rngState) - 1.0f);
     }
-    */
-  (*image)[idx] = col;
+
+    Ray ray{.origin = camera.position};
+    ray.direction = rayDirection(resolution, camera.fieldOfView, fC);
+    ray.direction = normalize(viewMatrix(camera.position, camera.target, camera.up) * ray.direction);
+    ray.invDirection = 1.0f / ray.direction;
+    ray.t = FLT_MAX;
+
+    uint bvhTests = 0u;
+    if (renderBVH) {
+      HitRecord closestHit{};
+      // Get number of BVH tests for primary ray
+      scene->intersect(ray, closestHit, bvhTests);
+      (*image)[idx] = vec3(bvhTests);
+    } else {
+      // Path trace scene
+      int bounces = maxBounces;
+      col += getIllumination(ray, scene, environment, rngState, bounces, bvhTests);
+    }
+  }
+
+  if (!renderBVH) {
+    // Average result
+    col /= samples;
+    // Tonemapping
+    col *= 1.0f - vec3{expf(-col.r), expf(-col.g), expf(-col.b)};
+    // Gamma correction
+    col = pow(col, vec3{1.0f / 2.2f});
+    // Output data
+    (*image)[idx] = col;
+  }
 }
 
 void renderGPU(
@@ -280,10 +301,11 @@ void renderGPU(
   std::vector<GPUMesh> gpuMeshes;
   gpuMeshes.reserve(scene.meshes.size());
 
-  for (uint i = 0u; i < scene.meshes.size(); i++) {
-    uint geometryIdx{0u};
-    uint materialIdx{0u};
-    gpuMeshes.push_back(GPUMesh(scene.meshes[i], geometryDevicePtr[geometryIdx], materialDevicePtr[materialIdx]));
+  for (const auto& mesh : scene.meshes) {
+    uint geometryIdx = std::distance(geometryPool.begin(), std::find(geometryPool.begin(), geometryPool.end(), mesh.geometry));
+    uint materialIdx = std::distance(materialPool.begin(), std::find(materialPool.begin(), materialPool.end(), mesh.material));
+
+    gpuMeshes.push_back(GPUMesh(mesh, geometryDevicePtr[geometryIdx], materialDevicePtr[materialIdx]));
   }
 
   // Copy scene
@@ -298,13 +320,18 @@ void renderGPU(
                  ceil((float)(gpuImage.height) / (float)(threadsPerBlock.y)));
 
   // printTLAS<<<dim3(10), dim3(1)>>>(sceneDevicePtr, 10);
-  cudaDeviceSetLimit(cudaLimitStackSize, 1e4);
+  // cudaDeviceSetLimit(cudaLimitStackSize, 1e4);
+
+  /* Timer */ auto start = std::chrono::steady_clock::now();
 
   /* Call Kernel */ render<<<numBlocks, threadsPerBlock>>>(sceneDevicePtr, camera, imageDevicePtr, environmentDevicePtr, samples, maxBounces, renderBVH);
 
   CHECK_LAST_CUDA_ERROR();
 
   cudaDeviceSynchronize();
+
+  /* Timer */ std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - start;
+  /* Timer */ std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
   // Copy data back to host
   CHECK_CUDA_ERROR(cudaMemcpy(image.data.data(), gpuImage.data, image.data.size() * sizeof(vec3), cudaMemcpyDeviceToHost));

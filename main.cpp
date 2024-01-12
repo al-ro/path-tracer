@@ -319,8 +319,6 @@ int main(int argc, char** argv) {
 
   // ----- Render geometry_ ----- //
 
-  /* Timer */ start = std::chrono::steady_clock::now();
-
   renderGPU(scene, geometryPool, materialPool, camera, image, environment, samples, bounces, renderBVH);
 
   /*
@@ -340,8 +338,6 @@ int main(int argc, char** argv) {
       t.join();
     }
   */
-  /* Timer */ std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - start;
-  /* Timer */ std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
 
   // ----- Output ----- //
 

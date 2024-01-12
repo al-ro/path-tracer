@@ -44,9 +44,11 @@ class GPUMaterial {
   vec3 emissive{0};
 
   // Multiplied with albedo
-  GPUImage* albedoTexture = nullptr;
+  GPUImage albedoTexture;
+  GPUImage* albedoTexturePtr = nullptr;
   // Multiplied with emissive
-  GPUImage* emissiveTexture = nullptr;
+  GPUImage emissiveTexture;
+  GPUImage* emissiveTexturePtr = nullptr;
 
   // Index of refraction for common dielectrics. Corresponds to F0 0.04
   const float IOR{1.5f};
@@ -54,22 +56,21 @@ class GPUMaterial {
   const vec3 F0 = vec3(pow(IOR - 1.0f, 2.0f) / pow(IOR + 1.0f, 2.0f));
 
   GPUMaterial() = delete;
-  GPUMaterial(vec3 albedo, float metalness, float roughness, vec3 emissive = vec3(0));
   GPUMaterial(const Material& material);
   // Delete copy constructor as the object manages its image data on the GPU
   GPUMaterial(const GPUMaterial& material) = delete;
   GPUMaterial(GPUMaterial&& material) = default;
   ~GPUMaterial();
   __device__ const vec3 getAlbedo(vec2 uv) const {
-    if (albedoTexture != nullptr && albedoTexture->width > 0.0) {
-      return albedo * (*albedoTexture)(uv);
+    if (albedoTexturePtr != nullptr && albedoTexturePtr->width > 0.0) {
+      return albedo * (*albedoTexturePtr)(uv);
     }
     return albedo;
   }
 
   __device__ const vec3 getEmissive(vec2 uv) const {
-    if (emissiveTexture != nullptr && emissiveTexture->width > 0.0) {
-      return emissive * (*emissiveTexture)(uv);
+    if (emissiveTexturePtr != nullptr && emissiveTexturePtr->width > 0.0) {
+      return emissive * (*emissiveTexturePtr)(uv);
     }
     return emissive;
   }

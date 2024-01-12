@@ -80,20 +80,15 @@ uint intersectTLAS(Ray& ray,
                    HitRecord& hitRecord,
                    uint& count);
 
-__device__ inline void swap(float& a, float& b) {
-  float temp = a;
-  a = b;
-  b = temp;
-}
-
-__device__ inline void swap(const BVHNode*& a, const BVHNode*& b) {
-  const BVHNode* temp = a;
+template <typename T>
+__device__ inline void swap(T& a, T& b) {
+  T temp = a;
   a = b;
   b = temp;
 }
 
 // The size of the stack for keeping track of BVH nodes to be tested
-#define STACK_SIZE 64
+#define STACK_SIZE 32
 
 __device__ inline void intersectBVH(
     Ray& ray,
@@ -103,8 +98,8 @@ __device__ inline void intersectBVH(
     const uint nodeIdx,
     HitRecord& hitRecord,
     uint& count) {
-  const BVHNode* node = &bvh[nodeIdx];
-  const BVHNode* stack[STACK_SIZE];
+  BVHNode node = bvh[nodeIdx];
+  uint stack[STACK_SIZE];
   // Start with root node on the stack
   int stackIdx{0};
 
@@ -113,9 +108,9 @@ __device__ inline void intersectBVH(
 
   while (1) {
     // If leaf node, intersect with primitives
-    if (node->count > 0) {
-      for (uint i = 0; i < node->count; i++) {
-        primitiveIndex = indices[node->leftFirst + i];
+    if (node.count > 0) {
+      for (uint i = 0; i < node.count; i++) {
+        primitiveIndex = indices[node.leftFirst + i];
         float distance = intersect(ray, primitives[primitiveIndex], barycentric);
         if (distance < ray.t) {
           ray.t = distance;
@@ -128,22 +123,22 @@ __device__ inline void intersectBVH(
       if (stackIdx <= 0) {
         break;
       } else {
-        node = stack[--stackIdx];
+        node = bvh[stack[--stackIdx]];
       }
       // Skip to the start of the loop
       continue;
     }
 
     // Compare the distances to the two child nodes
-    const BVHNode* child1 = &bvh[node->leftFirst];
-    const BVHNode* child2 = &bvh[node->leftFirst + 1];
-    float dist1 = intersect(ray, child1->aabb.min, child1->aabb.max);
-    float dist2 = intersect(ray, child2->aabb.min, child2->aabb.max);
+    uint idx1 = node.leftFirst;
+    uint idx2 = idx1 + 1u;
+    float dist1 = intersect(ray, bvh[idx1].aabb.min, bvh[idx1].aabb.max);
+    float dist2 = intersect(ray, bvh[idx2].aabb.min, bvh[idx2].aabb.max);
 
     // Consider closer one first
     if (dist1 > dist2) {
       swap(dist1, dist2);
-      swap(child1, child2);
+      swap(idx1, idx2);
     }
 
     // If closer node is missed, the farther one is as well
@@ -152,17 +147,17 @@ __device__ inline void intersectBVH(
       if (stackIdx <= 0) {
         break;
       } else {
-        node = stack[--stackIdx];
+        node = bvh[stack[--stackIdx]];
       }
     } else {
       // If closer node is hit, consider it for the next loop
-      node = child1;
+      node = bvh[idx1];
       count++;
 
       // If the farther node is hit, place it on the stack
       if (dist2 != FLT_MAX) {
         count++;
-        stack[stackIdx++] = child2;
+        stack[stackIdx++] = idx2;
       }
     }
   }
@@ -174,8 +169,8 @@ __device__ inline uint intersectTLAS(Ray& ray,
                                      const uint* indices,
                                      HitRecord& closestHit,
                                      uint& count) {
-  const BVHNode* node = &tlas[0];
-  const BVHNode* stack[STACK_SIZE];
+  BVHNode node = tlas[0];
+  uint stack[STACK_SIZE];
   // Start with root node on the stack
   int stackIdx{0};
   uint meshIndex{UINT_MAX};
@@ -184,9 +179,9 @@ __device__ inline uint intersectTLAS(Ray& ray,
 
   while (1) {
     // If leaf node, intersect with meshes
-    if (node->count > 0) {
-      for (uint i = 0; i < node->count; i++) {
-        uint idx = indices[node->leftFirst + i];
+    if (node.count > 0) {
+      for (uint i = 0; i < node.count; i++) {
+        uint idx = indices[node.leftFirst + i];
         meshes[idx].intersect(ray, hitRecord, count);
         if (ray.t < closestDist) {
           closestDist = ray.t;
@@ -199,22 +194,22 @@ __device__ inline uint intersectTLAS(Ray& ray,
       if (stackIdx <= 0) {
         break;
       } else {
-        node = stack[--stackIdx];
+        node = tlas[stack[--stackIdx]];
       }
       // Skip to the start of the loop
       continue;
     }
 
     // Compare the distances to the two child nodes
-    const BVHNode* child1 = &tlas[node->leftFirst];
-    const BVHNode* child2 = &tlas[node->leftFirst + 1];
-    float dist1 = intersect(ray, child1->aabb.min, child1->aabb.max);
-    float dist2 = intersect(ray, child2->aabb.min, child2->aabb.max);
+    uint idx1 = node.leftFirst;
+    uint idx2 = idx1 + 1u;
+    float dist1 = intersect(ray, tlas[idx1].aabb.min, tlas[idx1].aabb.max);
+    float dist2 = intersect(ray, tlas[idx2].aabb.min, tlas[idx2].aabb.max);
 
     // Consider closer one first
     if (dist1 > dist2) {
       swap(dist1, dist2);
-      swap(child1, child2);
+      swap(idx1, idx2);
     }
 
     // If closer node is missed, the farther one is as well
@@ -223,17 +218,17 @@ __device__ inline uint intersectTLAS(Ray& ray,
       if (stackIdx <= 0) {
         break;
       } else {
-        node = stack[--stackIdx];
+        node = tlas[stack[--stackIdx]];
       }
     } else {
       // If closer node is hit, consider it for the next loop
-      node = child1;
+      node = tlas[idx1];
       count++;
 
       // If the farther node is hit, place it on the stack
       if (dist2 != FLT_MAX) {
         count++;
-        stack[stackIdx++] = child2;
+        stack[stackIdx++] = idx2;
       }
     }
   }
