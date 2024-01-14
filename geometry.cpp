@@ -108,8 +108,14 @@ void Geometry::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
 }
 
 GPUGeometry::GPUGeometry(const Geometry& geometry) {
-  CHECK_CUDA_ERROR(cudaMalloc((void**)&primitives, geometry.primitives.size() * sizeof(Triangle)));
-  CHECK_CUDA_ERROR(cudaMemcpy(primitives, geometry.primitives.data(), geometry.primitives.size() * sizeof(Triangle), cudaMemcpyHostToDevice));
+  std::vector<GPUTriangle> gpuTriangles;
+  gpuTriangles.reserve(geometry.primitives.size());
+  for (const auto& tri : geometry.primitives) {
+    gpuTriangles.push_back(GPUTriangle{tri.v0, tri.v1, tri.v2});
+  }
+
+  CHECK_CUDA_ERROR(cudaMalloc((void**)&primitives, gpuTriangles.size() * sizeof(GPUTriangle)));
+  CHECK_CUDA_ERROR(cudaMemcpy(primitives, gpuTriangles.data(), gpuTriangles.size() * sizeof(GPUTriangle), cudaMemcpyHostToDevice));
 
   CHECK_CUDA_ERROR(cudaMalloc((void**)&indices, geometry.indices.size() * sizeof(uint)));
   CHECK_CUDA_ERROR(cudaMemcpy(indices, geometry.indices.data(), geometry.indices.size() * sizeof(uint), cudaMemcpyHostToDevice));

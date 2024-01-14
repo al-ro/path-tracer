@@ -6,7 +6,8 @@
 // Möller–Trumbore ray-triangle intersection
 // Return distance to triangle and the barycentric coordinates if there is a hit
 // FLT_MAX if no hit
-__host__ __device__ inline float intersect(const Ray& ray, const Triangle& triangle, vec2& barycentric) {
+template <typename Tri>
+__host__ __device__ inline float intersect(const Ray& ray, const Tri& triangle, vec2& barycentric) {
   const vec3 edge1 = triangle.v1 - triangle.v0;
   const vec3 edge2 = triangle.v2 - triangle.v0;
   const vec3 h = cross(ray.direction, edge2);
@@ -93,7 +94,7 @@ __device__ inline void swap(T& a, T& b) {
 __device__ inline void intersectBVH(
     Ray& ray,
     const BVHNode* bvh,
-    const Triangle* primitives,
+    const GPUTriangle* primitives,
     const uint* indices,
     const uint nodeIdx,
     HitRecord& hitRecord,

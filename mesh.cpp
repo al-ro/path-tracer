@@ -79,6 +79,5 @@ vec3 Mesh::getMax() const {
 }
 
 GPUMesh::GPUMesh(const Mesh& mesh, GPUGeometry* geometry, GPUMaterial* material) : invModelMatrix{mesh.invModelMatrix},
-                                                                                   normalMatrix{mesh.normalMatrix},
                                                                                    geometry{geometry},
                                                                                    material{material} {}

@@ -241,7 +241,7 @@ int main(int argc, char** argv) {
   uint height{400};
   uint samples{32};
   uint bounces{6};
-  uint numThreads{10};
+  uint numThreads{1};
   bool renderBVH{false};
   SampleScene sampleScene{THREE_STL};
 

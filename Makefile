@@ -1,7 +1,7 @@
-CFLAGS = -std=c++17 -O3
+CFLAGS = -std=c++17 -O3 
 
 build:
-	nvcc -arch=sm_80 $(CFLAGS) *.cpp *.cu -o PathTracer -diag-suppress 20012
+	nvcc -arch=sm_80 --use_fast_math $(CFLAGS) *.cpp *.cu -o PathTracer -diag-suppress 20012
 
 .PHONY: run
 

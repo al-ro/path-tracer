@@ -52,8 +52,14 @@ struct Triangle {
   vec3 v2{};
   // Location for spatial sorting
   vec3 centroid{FLT_MAX};
-  __host__ __device__ inline vec3 getMin() const { return min(min(v0, v1), v2); }
-  __host__ __device__ inline vec3 getMax() const { return max(max(v0, v1), v2); }
+  inline vec3 getMin() const { return min(min(v0, v1), v2); }
+  inline vec3 getMax() const { return max(max(v0, v1), v2); }
+};
+
+struct GPUTriangle {
+  vec3 v0{};
+  vec3 v1{};
+  vec3 v2{};
 };
 
 // Per-vertex normals and texture coordinates

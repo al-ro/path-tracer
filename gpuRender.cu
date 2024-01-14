@@ -69,7 +69,7 @@ __device__ vec3 getEnvironment(const GPUImage* environment, const vec3& directio
   uint v = environment->height * acosf(sampleDir.y) * INVPI;
   uint idx = min(u + v * environment->width, (environment->width * environment->height) - 1);
 
-  return 0.5f * (*environment)[idx];
+  return 0.75f * (*environment)[idx];
 }
 
 __device__ vec3 getIllumination(Ray& ray, const GPUScene* scene, const GPUImage* environment,
@@ -78,6 +78,7 @@ __device__ vec3 getIllumination(Ray& ray, const GPUScene* scene, const GPUImage*
   vec3 col{1};
 
   for (uint i = 0; i < bounceCount; i++) {
+    __syncwarp();
     HitRecord closestHit{};
     uint meshIdx = scene->intersect(ray, closestHit, testCount);
 
@@ -85,65 +86,30 @@ __device__ vec3 getIllumination(Ray& ray, const GPUScene* scene, const GPUImage*
       const GPUMesh& mesh{scene->meshes[meshIdx]};
 
       vec3 p = ray.origin + ray.direction * ray.t;
-      vec3 N = normalize(vec3(mesh.normalMatrix * vec4(mesh.geometry->getNormal(closestHit.hitIndex, closestHit.barycentric), 0.0f)));
+      vec3 N = normalize(vec3(transpose(mesh.invModelMatrix) * vec4(mesh.geometry->getNormal(closestHit.hitIndex, closestHit.barycentric), 0.0f)));
       if (dot(ray.direction, N) > 0.0f) {
         N = -N;
       }
 
-      const float metalness{mesh.material->metalness};
-      const float roughness{mesh.material->roughness};
+      vec3 V = -ray.direction;
+
+      const float metalness = {mesh.material->metalness};
+      const float roughness = {mesh.material->roughness};
       vec2 uv = mesh.geometry->getTexCoord(closestHit.hitIndex, closestHit.barycentric);
       const vec3 albedo = mesh.material->getAlbedo(uv);
       const vec3 emissive = mesh.material->getEmissive(uv);
 
       vec3 F0 = mix(mesh.material->F0, albedo, metalness);
 
-      vec3 sampleDir{};
       vec3 localCol{};
+      vec3 sampleDir{};
 
-      //--------------------- Specular ------------------------
-
-      vec2 Xi = getRandomVec2(rngState);
-      // Get a random halfway vector around the surface normal (in world space)
-      vec3 H = importanceSampleGGX(Xi, N, roughness);
-
-      vec3 V = -ray.direction;
-
-      // Generate sample direction as view ray reflected around h (note sign)
-      sampleDir = normalize(reflect(-V, H));
-
-      float NdotL = dot_c(N, sampleDir);
-      float NdotV = dot_c(N, V);
-      float NdotH = dot_c(N, H);
-      float VdotH = dot_c(V, H);
-
-      vec3 F = fresnel(VdotH, F0);
-      float G = smiths(NdotV, NdotL, roughness);
-
-      /*
-
-          The following can be simplified as the D term and many dot products cancel out
-
-          float D = distribution(NdotH, roughness);
-
-          // Cook-Torrance BRDF
-          vec3 brdfS = D * F * G / max(0.0001, (4.0 * NdotV * NdotL));
-
-          float pdfSpecular = (D * NdotH) / (4.0 * VdotH);
-          vec3 specular = (L(sampleDir) * brdfS * NdotL) / pdfSpecular;
-
-      */
-
-      // Simplified from the above
-
-      localCol = (F * G * VdotH) / (NdotV * NdotH);
-
-      if (metalness < 1.0f && getRandomFloat(rngState) > F.x) {
+      if (metalness == 0.0f) {
         //--------------------- Diffuse ------------------------
-        vec2 Xi = getRandomVec2(rngState);
-        vec3 kD = (1.0f - F) * (1.0f - metalness);
 
-        sampleDir = mix(sampleDir, importanceSampleCosine(Xi, N), kD.x);
+        vec2 Xi = getRandomVec2(rngState);
+
+        sampleDir = importanceSampleCosine(Xi, N);
 
         /*
             The discrete Riemann sum for the lighting equation is
@@ -151,31 +117,53 @@ __device__ vec3 getIllumination(Ray& ray, const GPUScene* scene, const GPUImage*
             Lambertian BRDF is c/PI and the pdf for cosine sampling is dot(l, n)/PI
             PI term and dot products cancel out leaving just c * L(l)
         */
-        localCol += kD * albedo;
-      }
+        localCol = albedo;
 
-      col *= localCol;
-      col += emissive;
+      } else {
+        //--------------------- Specular ------------------------
+
+        vec2 Xi = getRandomVec2(rngState);
+        // Get a random halfway vector around the surface normal (in world space)
+        vec3 H = importanceSampleGGX(Xi, N, roughness);
+
+        // Generate sample direction as view ray reflected around h (note sign)
+        sampleDir = normalize(reflect(-V, H));
+
+        float NdotL = dot_c(N, sampleDir);
+        float NdotV = dot_c(N, V);
+        float NdotH = dot_c(N, H);
+        float VdotH = dot_c(V, H);
+
+        vec3 F = fresnel(VdotH, F0);
+        float G = smiths(NdotV, NdotL, roughness);
+
+        /*
+
+            The following can be simplified as the D term and many dot products cancel out
+
+            float D = distribution(NdotH, roughness);
+
+            // Cook-Torrance BRDF
+            vec3 brdfS = D * F * G / max(0.0001, (4.0 * NdotV * NdotL));
+
+            float pdfSpecular = (D * NdotH) / (4.0 * VdotH);
+            vec3 specular = (L(sampleDir) * brdfS * NdotL) / pdfSpecular;
+
+        */
+
+        // Simplified from the above
+
+        localCol = (F * G * VdotH) / (NdotV * NdotH);
+      }
+      col *= localCol + emissive;
       ray = Ray{p + 1e-4f * N, sampleDir, 1.0f / sampleDir, FLT_MAX};
     } else {
       col *= getEnvironment(environment, ray.direction);
-      return col;
+      break;
     }
   }
 
-  return vec3(0);
-}
-
-__global__ void printTLAS(GPUScene* scene, uint size) {
-  uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx >= 1) {
-    return;
-  }
-  Ray ray{};
-  HitRecord closestHit{};
-  uint bvhTests{0u};
-
-  scene->intersect(ray, closestHit, bvhTests);
+  return col;
 }
 
 __global__ void render(GPUScene* scene, Camera camera, GPUImage* image, GPUImage* environment,
@@ -315,12 +303,9 @@ void renderGPU(
   CHECK_CUDA_ERROR(cudaMemcpy(sceneDevicePtr, &gpuScene, sizeof(GPUScene), cudaMemcpyHostToDevice));
 
   // Determine number of threads and blocks covering all pixels
-  dim3 threadsPerBlock(16, 16);
+  dim3 threadsPerBlock(8, 8);
   dim3 numBlocks(ceil((float)(gpuImage.width) / (float)(threadsPerBlock.x)),
                  ceil((float)(gpuImage.height) / (float)(threadsPerBlock.y)));
-
-  // printTLAS<<<dim3(10), dim3(1)>>>(sceneDevicePtr, 10);
-  // cudaDeviceSetLimit(cudaLimitStackSize, 1e4);
 
   /* Timer */ auto start = std::chrono::steady_clock::now();
 

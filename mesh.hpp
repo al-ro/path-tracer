@@ -58,15 +58,15 @@ class Mesh {
 
 class GPUMesh {
  public:
+  // Inverse of the model matrix to transform rays
+  mat4 invModelMatrix = identity<mat4>();
   // Device pointer to an externally managed complete GPUGeometry.
   GPUGeometry* geometry = nullptr;
 
   // Device pointer to an externally managed GPUMaterial.
   GPUMaterial* material = nullptr;
 
-  // Inverse of the model matrix to transform rays
-  mat4 invModelMatrix = identity<mat4>();
-  mat4 normalMatrix = transpose(invModelMatrix);
+  // mat4 normalMatrix = transpose(invModelMatrix);
 
   GPUMesh() = delete;
   GPUMesh(const Mesh& mesh, GPUGeometry* geometry, GPUMaterial* material);
