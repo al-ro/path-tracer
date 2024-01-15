@@ -38,6 +38,7 @@ std::atomic<uint> atomicIdx{0u};
 /*
   TODO:
     Stackless traversal
+    Better memory access patterns
 
     Specular dielectric
     Transmission
