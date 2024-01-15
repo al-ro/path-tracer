@@ -117,9 +117,6 @@ GPUGeometry::GPUGeometry(const Geometry& geometry) {
   CHECK_CUDA_ERROR(cudaMalloc((void**)&primitives, gpuTriangles.size() * sizeof(GPUTriangle)));
   CHECK_CUDA_ERROR(cudaMemcpy(primitives, gpuTriangles.data(), gpuTriangles.size() * sizeof(GPUTriangle), cudaMemcpyHostToDevice));
 
-  CHECK_CUDA_ERROR(cudaMalloc((void**)&indices, geometry.indices.size() * sizeof(uint)));
-  CHECK_CUDA_ERROR(cudaMemcpy(indices, geometry.indices.data(), geometry.indices.size() * sizeof(uint), cudaMemcpyHostToDevice));
-
   CHECK_CUDA_ERROR(cudaMalloc((void**)&bvh, geometry.bvh.size() * sizeof(BVHNode)));
   CHECK_CUDA_ERROR(cudaMemcpy(bvh, geometry.bvh.data(), geometry.bvh.size() * sizeof(BVHNode), cudaMemcpyHostToDevice));
 
@@ -142,7 +139,6 @@ GPUGeometry::GPUGeometry(const Geometry& geometry) {
 
 GPUGeometry::~GPUGeometry() {
   CHECK_CUDA_ERROR(cudaFree(primitives));
-  CHECK_CUDA_ERROR(cudaFree(indices));
   CHECK_CUDA_ERROR(cudaFree(bvh));
 
   if (hasNormals) {

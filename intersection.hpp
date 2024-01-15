@@ -95,7 +95,6 @@ __device__ inline void intersectBVH(
     Ray& ray,
     const BVHNode* bvh,
     const GPUTriangle* primitives,
-    const uint* indices,
     const uint nodeIdx,
     HitRecord& hitRecord,
     uint& count) {
@@ -104,19 +103,17 @@ __device__ inline void intersectBVH(
   // Start with root node on the stack
   int stackIdx{0};
 
-  uint primitiveIndex{};
-  vec2 barycentric{0};
-
   while (1) {
     // If leaf node, intersect with primitives
     if (node.count > 0) {
       for (uint i = 0; i < node.count; i++) {
-        primitiveIndex = indices[node.leftFirst + i];
-        float distance = intersect(ray, primitives[primitiveIndex], barycentric);
+        uint idx = node.leftFirst + i;
+        vec2 barycentric{0};
+        float distance = intersect(ray, primitives[idx], barycentric);
         if (distance < ray.t) {
           ray.t = distance;
           hitRecord.barycentric = barycentric;
-          hitRecord.hitIndex = primitiveIndex;
+          hitRecord.hitIndex = idx;
         }
       }
 
@@ -167,7 +164,6 @@ __device__ inline void intersectBVH(
 __device__ inline uint intersectTLAS(Ray& ray,
                                      const BVHNode* tlas,
                                      const GPUMesh* meshes,
-                                     const uint* indices,
                                      HitRecord& closestHit,
                                      uint& count) {
   BVHNode node = tlas[0];
@@ -182,7 +178,7 @@ __device__ inline uint intersectTLAS(Ray& ray,
     // If leaf node, intersect with meshes
     if (node.count > 0) {
       for (uint i = 0; i < node.count; i++) {
-        uint idx = indices[node.leftFirst + i];
+        uint idx = node.leftFirst + i;
         meshes[idx].intersect(ray, hitRecord, count);
         if (ray.t < closestDist) {
           closestDist = ray.t;

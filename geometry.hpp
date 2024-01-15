@@ -37,7 +37,6 @@ class Geometry {
 class GPUGeometry {
  public:
   GPUTriangle* primitives;
-  uint* indices;
   vec3* faceNormals;
   vec3* vertexNormals;
   vec2* texCoords;

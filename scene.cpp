@@ -60,12 +60,8 @@ GPUScene::GPUScene(const Scene& scene, const std::vector<GPUMesh>& gpuMeshes) {
 
   CHECK_CUDA_ERROR(cudaMalloc((void**)&tlas, scene.tlas.size() * sizeof(BVHNode)));
   CHECK_CUDA_ERROR(cudaMemcpy(tlas, scene.tlas.data(), scene.tlas.size() * sizeof(BVHNode), cudaMemcpyHostToDevice));
-
-  CHECK_CUDA_ERROR(cudaMalloc((void**)&indices, scene.indices.size() * sizeof(uint)));
-  CHECK_CUDA_ERROR(cudaMemcpy(indices, scene.indices.data(), scene.indices.size() * sizeof(uint), cudaMemcpyHostToDevice));
 }
 GPUScene::~GPUScene() {
   CHECK_CUDA_ERROR(cudaFree(meshes));
   CHECK_CUDA_ERROR(cudaFree(tlas));
-  CHECK_CUDA_ERROR(cudaFree(indices));
 }

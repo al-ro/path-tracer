@@ -27,7 +27,6 @@ class Scene {
 class GPUScene {
  public:
   GPUMesh* meshes;
-  uint* indices;
   BVHNode* tlas;
 
   GPUScene() = delete;
@@ -36,6 +35,6 @@ class GPUScene {
   GPUScene(const GPUScene& scene) = delete;
   ~GPUScene();
   __device__ uint intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
-    return intersectTLAS(ray, tlas, meshes, indices, hitRecord, count);
+    return intersectTLAS(ray, tlas, meshes, hitRecord, count);
   }
 };

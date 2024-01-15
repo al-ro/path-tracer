@@ -33,7 +33,7 @@ __device__ vec3 GPUGeometry::getNormal(uint idx, vec2 barycentric) const {
 
 // Find the distance to the closest intersection, the index of the primitive and the number of BVH tests.
 __device__ void GPUGeometry::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
-  intersectBVH(ray, bvh, primitives, indices, 0, hitRecord, count);
+  intersectBVH(ray, bvh, primitives, 0, hitRecord, count);
 }
 
 __device__ void GPUMesh::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
