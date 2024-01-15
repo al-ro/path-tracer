@@ -45,22 +45,28 @@ __host__ __device__ inline float intersect(const Ray& ray, const Tri& triangle, 
 
 // Ray-AABB intersection using the slab method which returns the distance to a hit with the AABB if
 // it closer than the existing ray.t value. Returns FLT_MAX
-__host__ __device__ inline float intersect(const Ray& ray, const vec3& bmin, const vec3& bmax) {
-  float tx1 = (bmin.x - ray.origin.x) * ray.invDirection.x;
-  float tx2 = (bmax.x - ray.origin.x) * ray.invDirection.x;
-  float tmin = min(tx1, tx2);
-  float tmax = max(tx1, tx2);
+__host__ __device__ inline float intersect(const Ray& ray, const AABB& aabb) {
+  vec3 t1 = (aabb.min - ray.origin) * ray.invDirection;
+  vec3 t2 = (aabb.max - ray.origin) * ray.invDirection;
 
-  float ty1 = (bmin.y - ray.origin.y) * ray.invDirection.y;
-  float ty2 = (bmax.y - ray.origin.y) * ray.invDirection.y;
-  tmin = max(tmin, min(ty1, ty2));
-  tmax = min(tmax, max(ty1, ty2));
+  float tmin = max(max(min(t1.x, t2.x), min(t1.y, t2.y)), min(t1.z, t2.z));
+  float tmax = min(min(max(t1.x, t2.x), max(t1.y, t2.y)), max(t1.z, t2.z));
+  /*
+    float tx1 = (bmin.x - ray.origin.x) * ray.invDirection.x;
+    float tx2 = (bmax.x - ray.origin.x) * ray.invDirection.x;
+    float tmin = min(tx1, tx2);
+    float tmax = max(tx1, tx2);
 
-  float tz1 = (bmin.z - ray.origin.z) * ray.invDirection.z;
-  float tz2 = (bmax.z - ray.origin.z) * ray.invDirection.z;
-  tmin = max(tmin, min(tz1, tz2));
-  tmax = min(tmax, max(tz1, tz2));
+    float ty1 = (bmin.y - ray.origin.y) * ray.invDirection.y;
+    float ty2 = (bmax.y - ray.origin.y) * ray.invDirection.y;
+    tmin = max(tmin, min(ty1, ty2));
+    tmax = min(tmax, max(ty1, ty2));
 
+    float tz1 = (bmin.z - ray.origin.z) * ray.invDirection.z;
+    float tz2 = (bmax.z - ray.origin.z) * ray.invDirection.z;
+    tmin = max(tmin, min(tz1, tz2));
+    tmax = min(tmax, max(tz1, tz2));
+  */
   if (tmax >= tmin && tmin < ray.t && tmax > 0) {
     return tmin;
   } else {
@@ -130,8 +136,8 @@ __device__ inline void intersectBVH(
     // Compare the distances to the two child nodes
     uint idx1 = node.leftFirst;
     uint idx2 = idx1 + 1u;
-    float dist1 = intersect(ray, bvh[idx1].aabb.min, bvh[idx1].aabb.max);
-    float dist2 = intersect(ray, bvh[idx2].aabb.min, bvh[idx2].aabb.max);
+    float dist1 = intersect(ray, bvh[idx1].aabb);
+    float dist2 = intersect(ray, bvh[idx2].aabb);
 
     // Consider closer one first
     if (dist1 > dist2) {
@@ -200,8 +206,8 @@ __device__ inline uint intersectTLAS(Ray& ray,
     // Compare the distances to the two child nodes
     uint idx1 = node.leftFirst;
     uint idx2 = idx1 + 1u;
-    float dist1 = intersect(ray, tlas[idx1].aabb.min, tlas[idx1].aabb.max);
-    float dist2 = intersect(ray, tlas[idx2].aabb.min, tlas[idx2].aabb.max);
+    float dist1 = intersect(ray, tlas[idx1].aabb);
+    float dist2 = intersect(ray, tlas[idx2].aabb);
 
     // Consider closer one first
     if (dist1 > dist2) {

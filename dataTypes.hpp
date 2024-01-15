@@ -68,8 +68,8 @@ struct VertexAttributes {
   std::vector<vec2> texCoords{};
 };
 
-/* Bounding volume hierarchy node */
-struct BVHNode {
+// Bounding volume hierarchy node
+struct ALIGN(8) BVHNode {
   AABB aabb;
   // Index of first primitive or left child
   uint leftFirst;
