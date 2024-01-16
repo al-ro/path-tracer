@@ -2,7 +2,62 @@
 
 This work is in progress.
 
-C++/CUDA path tracer with bounding volume hierarchy (BVH) based on [the tutorial series by jbikker](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
+CUDA/C++ path tracer with bounding volume hierarchy (BVH) based on [the tutorial series by jbikker](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
+
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%">Scene 0: 3 instances</th>
+      <th width="50%">BVH heat map (max 267) 0.0035 s</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="50%"><img src="images/three_stl.png"/></td>
+      <td width="50%"><img src="images/three_stl_bvh.png"/></td>
+    </tr>
+  </tbody>
+</table>
+
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%">Scene 1: 10,000 instances</th>
+      <th width="50%">BVH heat map (max 600) 0.026 s</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="50%"><img src="images/scatter_stl.png"/></td>
+      <td width="50%"><img src="images/scatter_stl_bvh.png"/></td>
+    </tr>
+  </tbody>
+</table>
+
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%">Scene 2: Model with vertex attributes</th>
+      <th width="50%">BVH heat map (max 123) 0.0027 s</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="50%"><img src="images/obj.png"/></td>
+      <td width="50%"><img src="images/obj_bvh.png"/></td>
+    </tr>
+  </tbody>
+</table>
+
+- Resolution: 1500 x 800
+- Samples: 320
+- Max bounces: 6
+
+Scene | Render | BVH build | TLAS nodes | Triangles (per model) | BLAS nodes (per model)
+:---:|:---:|:---:|:---:|:---:|:---:|
+0 | 4.5 s | 0.88 s | 5 | 505,848 | 792,591 
+1 | 58 s | 0.88 s | 19,819 | 505,848 | 792,591 
+2 | 7.8 s | 0.005 s |  1 | 3,828 | 4899 
 
 
 ["Bust of Menelaus"](https://www.myminifactory.com/object/3d-print-bust-of-menelaus-32197) by Scan The World
@@ -30,6 +85,7 @@ Resulting image is output as *output.bmp*
 - make run (with default settings)
 - make all (clean, build, run)
 - ./PathTracer \[options\]
+    - *-d* height of rendered image
     - *-w* width of rendered image (e.g. -w 512)
     - *-h* height of rendered image
     - *-s* samples per pixel
@@ -46,5 +102,4 @@ Resulting image is output as *output.bmp*
 - [stl_reader](https://github.com/sreiter/stl_reader) for reading STL files (included in /lib)
 - [tinyobjloader](https://github.com/tinyobjloader/tinyobjloader) for loading OBJ files (included in /lib)
 - C++17
-- CUDA (Nvidia only)
 - make (optional)

@@ -65,6 +65,7 @@ inline vec3 rotateZ(vec3 p, float angle) {
 }
 
 vec3 getEnvironment(const vec3& direction) {
+  // Rotate environment map
   vec3 sampleDir = normalize(rotateY(direction, -M_PI));
   uint u = environment.width * (atan2f(sampleDir.z, sampleDir.x) * INV2PI + 0.5f);
   uint v = environment.height * acosf(sampleDir.y) * INVPI;
@@ -278,6 +279,7 @@ int main(int argc, char** argv) {
       case 'a':
         renderBVH = true;
         continue;
+
       case 'd':
         cudaRender = atoi(optarg) == 0;
         continue;
