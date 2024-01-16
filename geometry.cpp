@@ -14,8 +14,8 @@ Geometry::Geometry(std::vector<Triangle> primitives,
                                                   attributes{attributes},
                                                   bvh{std::vector<BVHNode>(2 * primitives.size() - 1)} {
   generateIndices();
-  generateNormals();
   generateBVH();
+  generateNormals();
 
   aabbMin = bvh[0].aabb.min;
   aabbMax = bvh[0].aabb.max;
@@ -41,7 +41,7 @@ void Geometry::generateBVH() {
   uint nodesUsed{1};
   uint rootNodeIdx{0};
 
-  auto start{std::chrono::steady_clock::now()};
+  /* Timer */ auto start{std::chrono::steady_clock::now()};
 
   // Build BLAS of triangles of the geometry
   buildBVH(bvh, primitives, indices, rootNodeIdx, nodesUsed);
@@ -50,9 +50,19 @@ void Geometry::generateBVH() {
   // Resize it to actually used number of nodes to save memory space
   bvh.resize(nodesUsed);
 
-  std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - start;
-  std::cout << "BVH build time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
-  std::cout << "Nodes: " << nodesUsed << std::endl;
+  reorder(primitives, indices);
+
+  if (attributes.normals.size() > 0) {
+    reorder(attributes.normals, indices, 3u);
+  }
+
+  if (attributes.texCoords.size() > 0) {
+    reorder(attributes.texCoords, indices, 3u);
+  }
+
+  /* Timer */ std::chrono::duration<double> duration = std::chrono::steady_clock::now() - start;
+  /* Timer */ std::cout << "BVH build time: " << std::floor(duration.count() * 1e4f) / 1e4f << " s\n";
+  /* Timer */ std::cout << "Nodes: " << nodesUsed << std::endl;
 }
 
 vec3 Geometry::getNormal(uint idx, vec2 barycentric) const {
@@ -93,5 +103,5 @@ void Geometry::generateNormals() {
 }
 
 void Geometry::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
-  intersectBVH(ray, bvh, primitives, indices, 0, hitRecord, count);
+  intersectBVH(ray, bvh, primitives, 0, hitRecord, count);
 }

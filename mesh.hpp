@@ -34,7 +34,7 @@ class Mesh {
   vec3 aabbMax{-FLT_MAX};
   vec3 centroid{0};
 
-  Mesh() = delete;
+  Mesh() = default;
   Mesh(std::shared_ptr<Geometry> geometry, std::shared_ptr<Material> material);
   ~Mesh() = default;
 

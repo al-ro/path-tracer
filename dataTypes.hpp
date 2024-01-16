@@ -13,13 +13,14 @@
 
 using namespace glm;
 
-/* 2D section of render target */
-struct Extent {
-  vec2 min{};
-  vec2 max{};
-};
+// if NVCC
+#if defined(__CUDACC__)
+#define ALIGN(n) __align__(n)
+#else
+#define ALIGN(n) __attribute__((aligned(n)))
+#endif
 
-/* Axis aligned bounding box */
+// Axis aligned bounding box
 struct AABB {
   vec3 min{FLT_MAX};
   vec3 max{-FLT_MAX};
@@ -53,14 +54,14 @@ struct Triangle {
   inline vec3 getMax() const { return max(max(v0, v1), v2); }
 };
 
+// Per-vertex normals and texture coordinates
 struct VertexAttributes {
   std::vector<vec3> normals{};
   std::vector<vec2> texCoords{};
-  std::vector<vec3> tangents{};
 };
 
-/* Bounding volume hierarchy node */
-struct BVHNode {
+// Bounding volume hierarchy node
+struct ALIGN(8) BVHNode {
   AABB aabb;
   // Index of first primitive or left child
   uint leftFirst;
@@ -74,18 +75,19 @@ struct Bin {
   uint count{};
 };
 
-/* 3D vector with origin, direction and intersection position t */
+// 3D vector with origin, direction and intersection position t
 struct Ray {
-  vec3 origin{};
-  vec3 direction{};
-  vec3 invDirection{};
+  vec3 origin{0};
+  vec3 direction{0, 0, -1};
+  vec3 invDirection{0, 0, -1};
   // Distance along ray where an intersection occurs
   float t{FLT_MAX};
 };
 
+// Stores primitive index and barycentric coordinates of intersection point
 struct HitRecord {
-  uint hitIndex{UINT_MAX};
   vec2 barycentric{0};
+  uint hitIndex{UINT_MAX};
 };
 
 struct Camera {
@@ -114,4 +116,19 @@ inline std::ostream& operator<<(std::ostream& os, const mat4x4& m) {
   }
 
   return os;
+}
+
+inline float dot_c(const vec3& a, const vec3& b) {
+  return max(dot(a, b), 1e-5f);
+}
+
+template <typename T>
+void inline reorder(std::vector<T>& values, const std::vector<uint>& order, const uint size = 1u) {
+  std::vector<T> reorderedValues(values.size());
+  for (int i = 0; i < order.size(); i++) {
+    for (int j = 0; j < size; j++) {
+      reorderedValues[size * i + j] = values[size * order[i] + j];
+    }
+  }
+  values = reorderedValues;
 }

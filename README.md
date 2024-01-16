@@ -8,7 +8,7 @@ Multithreaded C++ path tracer with bounding volume hierarchy (BVH) based on [the
   <thead>
     <tr>
       <th width="50%">Scene 0: 3 instances</th>
-      <th width="50%">BVH heat map (max 267) 0.09 s</th>
+      <th width="50%">BVH heat map (max 267) 0.08 s</th>
     </tr>
   </thead>
   <tbody>
@@ -23,7 +23,7 @@ Multithreaded C++ path tracer with bounding volume hierarchy (BVH) based on [the
   <thead>
     <tr>
       <th width="50%">Scene 1: 10,000 instances</th>
-      <th width="50%">BVH heat map (max 600) 0.32 s</th>
+      <th width="50%">BVH heat map (max 600) 0.26 s</th>
     </tr>
   </thead>
   <tbody>
@@ -56,9 +56,9 @@ Multithreaded C++ path tracer with bounding volume hierarchy (BVH) based on [the
 
 Scene | Render | BVH build | TLAS nodes | Triangles (per model) | BLAS nodes (per model)
 :---:|:---:|:---:|:---:|:---:|:---:|
-0 | 55 s | 0.94 s | 5 | 505,848 | 792,591 
-1 | 494 s | 0.94 s | 19,819 | 505,848 | 792,591 
-2 | 203 s | 0.005 s |  1 | 3,828 | 4899 
+0 | 36 s | 0.88 s | 5 | 505,848 | 792,591 
+1 | 269 s | 0.88 s | 19,819 | 505,848 | 792,591 
+2 | 107 s | 0.005 s |  1 | 3,828 | 4899 
 
 
 ["Bust of Menelaus"](https://www.myminifactory.com/object/3d-print-bust-of-menelaus-32197) by Scan The World

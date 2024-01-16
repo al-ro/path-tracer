@@ -123,7 +123,7 @@ void getScene(SampleScene sampleScene,
       materialPool.emplace_back(std::make_shared<Material>(Material{}));
       materialPool[0]->albedoTexture = loadImage("models/viking-room/albedo.png");
       materialPool[0]->emissiveTexture = loadImage("models/viking-room/emissive.png");
-      materialPool[0]->emissive = vec3{5};
+      materialPool[0]->emissive = vec3{1};
 
       // Mesh
       scene.meshes.emplace_back(Mesh{geometryPool[0], materialPool[0]});
@@ -137,8 +137,8 @@ void getScene(SampleScene sampleScene,
       exit(1);
       return;
   }
-  /* Timer */ std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - start;
-  /* Timer */ std::cout << "\nObject processing time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
+  /* Timer */ std::chrono::duration<double> duration = std::chrono::steady_clock::now() - start;
+  /* Timer */ std::cout << "\nObject processing time: " << std::floor(duration.count() * 1e4f) / 1e4f << " s\n";
 
   scene.completeScene();
 }

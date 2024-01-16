@@ -3,6 +3,7 @@
 #include <chrono>
 
 #include "bvh.hpp"
+#include "intersection.hpp"
 
 Scene::Scene(const std::vector<Mesh>& meshes) : meshes{meshes},
                                                 tlas{std::vector<BVHNode>(2.0 * meshes.size() - 1)},
@@ -22,7 +23,7 @@ void Scene::generateTLAS() {
   uint nodesUsed{1};
   uint rootNodeIdx{0};
 
-  auto start{std::chrono::steady_clock::now()};
+  /* Timer */ auto start{std::chrono::steady_clock::now()};
 
   // Build TLAS of meshes in the scene
   buildBVH(tlas, meshes, indices, rootNodeIdx, nodesUsed);
@@ -31,21 +32,23 @@ void Scene::generateTLAS() {
   // Resize it to actually used number of nodes to save memory space
   tlas.resize(nodesUsed);
 
-  std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - start;
-  std::cout << "TLAS build time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
-  std::cout << "TLAS nodes: " << nodesUsed << std::endl;
+  reorder(meshes, indices);
+
+  /* Timer */ std::chrono::duration<double> duration = std::chrono::steady_clock::now() - start;
+  /* Timer */ std::cout << "\nTLAS build time: " << std::floor(duration.count() * 1e4f) / 1e4f << " s\n";
+  /* Timer */ std::cout << "TLAS nodes: " << nodesUsed << std::endl;
 }
 
 void Scene::generateIndices() {
   if (indices.size() == 0) {
     indices = std::vector<uint>(meshes.size());
   }
-  // Populate primitives indices sequentially [0...N)
+  // Populate primitive indices sequentially [0...N)
   for (uint i = 0u; i < indices.size(); i++) {
     indices[i] = i;
   }
 }
 
 uint Scene::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
-  return intersectTLAS(ray, tlas, meshes, indices, hitRecord, count);
+  return intersectTLAS(ray, tlas, meshes, hitRecord, count);
 }
