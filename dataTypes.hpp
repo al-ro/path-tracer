@@ -126,16 +126,6 @@ inline std::ostream& operator<<(std::ostream& os, const mat4x4& m) {
   return os;
 }
 
-template <typename T>
-void inline reorder(std::vector<T>& values, const std::vector<uint>& order, const uint size = 1u) {
-  std::vector<T> reorderedValues(values.size());
-  for (int i = 0; i < order.size(); i++) {
-    for (int j = 0; j < size; j++) {
-      reorderedValues[size * i + j] = values[size * order[i] + j];
-    }
-  }
-  values = reorderedValues;
-}
 __host__ __device__ inline float dot_c(const vec3& a, const vec3& b) {
   return max(dot(a, b), 1e-5f);
 }
