@@ -179,6 +179,14 @@ void renderGPU(
     const uint samples,
     const int maxBounces,
     const bool renderBVH) {
+  cudaEvent_t start;
+  cudaEvent_t stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  float milliseconds{};
+
+  /* Timer */ cudaEventRecord(start);
+
   // Make copy of render target image
   GPUImage gpuImage{image};
   GPUImage* imageDevicePtr;
@@ -253,23 +261,28 @@ void renderGPU(
   CHECK_CUDA_ERROR(cudaMalloc(&sceneDevicePtr, sizeof(GPUScene)));
   CHECK_CUDA_ERROR(cudaMemcpy(sceneDevicePtr, &gpuScene, sizeof(GPUScene), cudaMemcpyHostToDevice));
 
+  /* Timer */ cudaEventRecord(stop);
+  /* Timer */ cudaEventSynchronize(stop);
+  /* Timer */ cudaEventElapsedTime(&milliseconds, start, stop);
+  /* Timer */ std::cout << "\nGPU data transfer time: " << std::floor((milliseconds / 1e3f) * 1e4f) / 1e4f << " s\n";
+
   // Determine number of threads and blocks covering all pixels
   dim3 threadsPerBlock(8, 8);
   dim3 numBlocks(ceil((float)(gpuImage.width) / (float)(threadsPerBlock.x)),
                  ceil((float)(gpuImage.height) / (float)(threadsPerBlock.y)));
 
-  /* Timer */ auto start = std::chrono::steady_clock::now();
+  /* Timer */ cudaEventRecord(start);
 
+  std::cout << "Rendering..." << std::endl;
   /* Call Kernel */ render<<<numBlocks, threadsPerBlock>>>(sceneDevicePtr, camera, imageDevicePtr, environmentDevicePtr, samples, maxBounces, renderBVH);
-
   CHECK_LAST_CUDA_ERROR();
 
-  cudaDeviceSynchronize();
+  /* Timer */ cudaEventRecord(stop);
+  /* Timer */ cudaEventSynchronize(stop);
+  /* Timer */ cudaEventElapsedTime(&milliseconds, start, stop);
+  /* Timer */ std::cout << "\nRender time: " << std::floor((milliseconds / 1e3f) * 1e4f) / 1e4f << " s\n";
 
-  /* Timer */ std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - start;
-  /* Timer */ std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
-
-  // Copy data back to host
+  // Copy data back to host. cudaMemcpy does not start until all GPU operations have finished.
   CHECK_CUDA_ERROR(cudaMemcpy(image.data.data(), gpuImage.data, image.data.size() * sizeof(vec3), cudaMemcpyDeviceToHost));
 
   // Free device pointers
@@ -292,4 +305,7 @@ void renderGPU(
   for (const auto& material : gpuMaterialPool) {
     delete material;
   }
+
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
 }

@@ -242,8 +242,9 @@ int main(int argc, char** argv) {
   uint height{400};
   uint samples{32};
   uint bounces{6};
-  uint numThreads{1};
+  uint numThreads{10};
   bool renderBVH{false};
+  bool cudaRender{true};
   SampleScene sampleScene{THREE_STL};
 
   // Parse command line arguments
@@ -277,9 +278,12 @@ int main(int argc, char** argv) {
       case 'a':
         renderBVH = true;
         continue;
+      case 'd':
+        cudaRender = atoi(optarg) == 0;
+        continue;
 
       default:
-        std::cout << "Options\n-w\t<width>\n-h\t<height>\n-s\t<samples>\n-t\t<threads>\n-b\t<bounces>\n-p\t<0|1|2>\tpreset scene\n-a\trender BVH heat map (only main ray, single sample, no jitter)\n";
+        std::cout << "Options\n-d\t0: CUDA (default), 1: CPU\n-w\t<width>\n-h\t<height>\n-s\t<samples>\n-t\t<threads>\n-b\t<bounces>\n-p\t<0|1|2>\tpreset scene\n-a\trender BVH heat map (only main ray, single sample, no jitter)\n";
         return EXIT_SUCCESS;
         break;
     }
@@ -290,6 +294,13 @@ int main(int argc, char** argv) {
   if (renderBVH) {
     samples = 1u;
     bounces = 1u;
+  }
+
+  if (cudaRender) {
+    numThreads = 1u;
+    std::cout << "Rendering using CUDA" << std::endl;
+  } else {
+    std::cout << "Rendering using CPU" << std::endl;
   }
 
   std::cout << "\nDimensions: [" << width << ", " << height << "]\tSamples: " << samples
@@ -320,9 +331,11 @@ int main(int argc, char** argv) {
 
   // ----- Render geometry_ ----- //
 
-  renderGPU(scene, geometryPool, materialPool, camera, image, environment, samples, bounces, renderBVH);
+  if (cudaRender) {
+    renderGPU(scene, geometryPool, materialPool, camera, image, environment, samples, bounces, renderBVH);
+  } else {
+    /* Timer */ start = std::chrono::steady_clock::now();
 
-  /*
     std::vector<std::thread> threads(numThreads);
 
     // Launch threads
@@ -338,7 +351,10 @@ int main(int argc, char** argv) {
     for (auto& t : threads) {
       t.join();
     }
-  */
+
+    /* Timer */ std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now() - start;
+    /* Timer */ std::cout << "\nRender time: " << std::floor(elapsed_seconds.count() * 1e4f) / 1e4f << " s\n";
+  }
 
   // ----- Output ----- //
 
