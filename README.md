@@ -2,7 +2,9 @@
 
 This work is in progress.
 
-CUDA/C++ path tracer with bounding volume hierarchy (BVH) based on [the tutorial series by jbikker](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
+CUDA / C++ path tracer with bounding volume hierarchy (BVH) based on [the tutorial series by jbikker](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
+
+[Pure C++ version for CPU](https://github.com/al-ro/path-tracer/tree/main)
 
 <table width="100%">
   <thead>
@@ -85,7 +87,7 @@ Resulting image is output as *output.bmp*
 - make run (with default settings)
 - make all (clean, build, run)
 - ./PathTracer \[options\]
-    - *-d* height of rendered image
+    - *-d* 0: CUDA (default), 1: CPU
     - *-w* width of rendered image (e.g. -w 512)
     - *-h* height of rendered image
     - *-s* samples per pixel
