@@ -19,29 +19,11 @@ trap cancel SIGQUIT
 
 for scene in `seq 0 2`
 do
-	echo -n "GPU BVH $scene..."
-	file="GPU_BVH"$scene".out"
-	./PathTracer -w $width -h $height -p $scene -d 0 -a 1>$file
-	timing="$(grep "$prefix" $file)"
-	echo "$timing" | sed -e "s/^$prefix//"
-done
-
-for scene in `seq 0 2`
-do
-	echo -n "GPU scene $scene..."
-	file="GPU_scene"$scene".out"
-	./PathTracer -w $width -h $height -s $samples -p $scene -d 0 1>$file
-	timing="$(grep "$prefix" $file)"
-	echo "$timing" | sed -e "s/^$prefix//"
-done
-
-for scene in `seq 0 2`
-do
 	for i in ${threads[@]}
 	do
 		echo -n "CPU BVH $scene threads $i..."
 		file="CPU_BVH_"$scene"_threads_"$i".out"
-       	./PathTracer -w $width -h $height -p $scene -d 1 -t $i -a 1>$file
+       	./PathTracer -w $width -h $height -p $scene -t $i -a 1>$file
 		timing="$(grep "$prefix" $file)"
 		echo "$timing" | sed -e "s/^$prefix//"
 	done
@@ -53,7 +35,7 @@ do
 	do
 		echo -n "CPU scene $scene threads $i..."
 		file="CPU_scene_"$scene"_threads_"$i".out"
-       	./PathTracer -w $width -h $height -s $samples -p $scene -d 1 -t $i 1>$file
+       	./PathTracer -w $width -h $height -s $samples -p $scene -t $i 1>$file
 		timing="$(grep "$prefix" $file)"
 		echo "$timing" | sed -e "s/^$prefix//"
 	done
