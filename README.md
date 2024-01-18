@@ -6,6 +6,8 @@ CUDA / C++ path tracer with bounding volume hierarchy (BVH) based on [the tutori
 
 [Pure C++ version for CPU](https://github.com/al-ro/path-tracer/tree/main)
 
+### Test scenes
+
 <table width="100%">
   <thead>
     <tr>
@@ -51,15 +53,46 @@ CUDA / C++ path tracer with bounding volume hierarchy (BVH) based on [the tutori
   </tbody>
 </table>
 
-- Resolution: 1500 x 800
-- Samples: 320
-- Max bounces: 6
+|| triangles per mesh | BLAS | time (s) | TLAS | total triangles | max tests
+:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+Scene 0 | 505,848 | 792,591 | 0.88 | 5 | 1,517,544 | 267
+Scene 1 | 505,848 | 792,591 | 0.88 | 19,819 | 5,058,480,000 | 600
+Scene 2 | 3,828 | 4,899 | 0.0049 | 1 | 3,828 | 123
 
-Scene | Render | BVH build | TLAS nodes | Triangles (per model) | BLAS nodes (per model)
-:---:|:---:|:---:|:---:|:---:|:---:|
-0 | 4.5 s | 0.88 s | 5 | 505,848 | 792,591 
-1 | 58 s | 0.88 s | 19,819 | 505,848 | 792,591 
-2 | 7.8 s | 0.005 s |  1 | 3,828 | 4899 
+### Performance
+
+- Resolution: 1500 x 800
+- Samples: 100
+- Max bounces: 6
+- CPU: 13th Gen Intel Core i7-13700H × 20
+- GPU: NVIDIA GeForce RTX 3050 6GB
+
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%"><img src="images/bvh_0.png"/></td>
+      <td width="50%"><img src="images/render_0.png"/></td>
+    </tr>
+  </tbody>
+</table>
+
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%"><img src="images/bvh_1.png"/></td>
+      <td width="50%"><img src="images/render_1.png"/></td>
+    </tr>
+  </tbody>
+</table>
+
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%"><img src="images/obj.png"/></td>
+      <td width="50%"><img src="images/render_2.png"/></td>
+    </tr>
+  </tbody>
+</table>
 
 
 ["Bust of Menelaus"](https://www.myminifactory.com/object/3d-print-bust-of-menelaus-32197) by Scan The World
