@@ -12,7 +12,7 @@ CUDA / C++ path tracer with bounding volume hierarchy (BVH) based on [the tutori
   <thead>
     <tr>
       <th width="50%">Scene 0: 3 instances</th>
-      <th width="50%">BVH heat map (max 267) 0.0035 s</th>
+      <th width="50%">BVH heat map (max 267)</th>
     </tr>
   </thead>
   <tbody>
@@ -27,7 +27,7 @@ CUDA / C++ path tracer with bounding volume hierarchy (BVH) based on [the tutori
   <thead>
     <tr>
       <th width="50%">Scene 1: 10,000 instances</th>
-      <th width="50%">BVH heat map (max 600) 0.026 s</th>
+      <th width="50%">BVH heat map (max 600)</th>
     </tr>
   </thead>
   <tbody>
@@ -42,7 +42,7 @@ CUDA / C++ path tracer with bounding volume hierarchy (BVH) based on [the tutori
   <thead>
     <tr>
       <th width="50%">Scene 2: Model with vertex attributes</th>
-      <th width="50%">BVH heat map (max 123) 0.0027 s</th>
+      <th width="50%">BVH heat map (max 123)</th>
     </tr>
   </thead>
   <tbody>
@@ -88,7 +88,7 @@ Scene 2 | 3,828 | 4,899 | 0.0049 | 1 | 3,828 | 123
 <table width="100%">
   <tbody>
     <tr>
-      <td width="50%"><img src="images/obj.png"/></td>
+      <td width="50%"><img src="images/bvh_2.png"/></td>
       <td width="50%"><img src="images/render_2.png"/></td>
     </tr>
   </tbody>
