@@ -125,7 +125,7 @@ Resulting image is output as *output.bmp*
     - *-h* height of rendered image
     - *-s* samples per pixel
     - *-b* maximum bounces per ray per sample
-    - *-t* number of threads
+    - *-t* number of threads (ignored when using CUDA)
     - *-p* preset scene \[0, 2\]
     - *-a* output BVH heatmap (ignores -s and -b)
 
