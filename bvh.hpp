@@ -20,7 +20,7 @@ void updateNodeBounds(BVHNode& node,
   }
 }
 
-// Determine triangle counts and bounds for given split candidate
+// Determine primitive counts and bounds for given split candidate
 template <typename Primitive>
 float evaluateSAH(BVHNode& node, uint axis, float pos,
                   const std::vector<Primitive>& primitives,
@@ -32,15 +32,15 @@ float evaluateSAH(BVHNode& node, uint axis, float pos,
   uint rightCount{0};
 
   for (uint i = 0; i < node.count; i++) {
-    const Primitive& triangle = primitives[indices[node.leftFirst + i]];
-    if (triangle.centroid[axis] < pos) {
+    const Primitive& primitive = primitives[indices[node.leftFirst + i]];
+    if (primitive.centroid[axis] < pos) {
       leftCount++;
-      leftBox.grow(triangle.getMin());
-      leftBox.grow(triangle.getMax());
+      leftBox.grow(primitive.getMin());
+      leftBox.grow(primitive.getMax());
     } else {
       rightCount++;
-      rightBox.grow(triangle.getMin());
-      rightBox.grow(triangle.getMax());
+      rightBox.grow(primitive.getMin());
+      rightBox.grow(primitive.getMax());
     }
   }
 
@@ -64,9 +64,9 @@ float findBestSplitPlane(BVHNode& node,
 
     // Split the space bounded by primitive centroids
     for (uint i = 0u; i < node.count; i++) {
-      const Primitive& triangle = primitives[indices[node.leftFirst + i]];
-      boundsMin = min(boundsMin, triangle.centroid[axis]);
-      boundsMax = max(boundsMax, triangle.centroid[axis]);
+      const Primitive& primitive = primitives[indices[node.leftFirst + i]];
+      boundsMin = min(boundsMin, primitive.centroid[axis]);
+      boundsMax = max(boundsMax, primitive.centroid[axis]);
     }
 
     if (boundsMin == boundsMax) {
@@ -78,11 +78,11 @@ float findBestSplitPlane(BVHNode& node,
     float binSize = COUNT / (boundsMax - boundsMin);
 
     for (uint i = 0; i < node.count; i++) {
-      const Primitive& triangle = primitives[indices[node.leftFirst + i]];
-      uint binIdx = min((float)COUNT - 1.0f, floor((triangle.centroid[axis] - boundsMin) * binSize));
+      const Primitive& primitive = primitives[indices[node.leftFirst + i]];
+      uint binIdx = min((float)COUNT - 1.0f, floor((primitive.centroid[axis] - boundsMin) * binSize));
       bins[binIdx].count++;
-      bins[binIdx].bounds.grow(triangle.getMin());
-      bins[binIdx].bounds.grow(triangle.getMax());
+      bins[binIdx].bounds.grow(primitive.getMin());
+      bins[binIdx].bounds.grow(primitive.getMax());
     }
 
     std::vector<float> leftArea(COUNT - 1u);
