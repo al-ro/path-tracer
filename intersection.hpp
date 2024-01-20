@@ -77,7 +77,6 @@ __host__ __device__ inline float intersect(const Ray& ray, const AABB& aabb) {
 void intersectBVH(Ray& ray,
                   const std::vector<BVHNode>& bvh,
                   const std::vector<Triangle>& primitives,
-                  const uint nodeIdx,
                   HitRecord& HitRecord,
                   uint& count);
 
@@ -88,7 +87,7 @@ uint intersectTLAS(Ray& ray,
                    uint& count);
 
 template <typename T>
-__device__ inline void swap(T& a, T& b) {
+__host__ __device__ inline void swap(T& a, T& b) {
   T temp = a;
   a = b;
   b = temp;
@@ -97,17 +96,16 @@ __device__ inline void swap(T& a, T& b) {
 // The size of the stack for keeping track of BVH nodes to be tested
 #define STACK_SIZE 32
 
-__device__ inline void intersectBVH(
-    Ray& ray,
-    const BVHNode* bvh,
-    const GPUTriangle* primitives,
-    const uint nodeIdx,
-    HitRecord& hitRecord,
-    uint& count) {
-  BVHNode node = bvh[nodeIdx];
+template <typename TriangleClass>
+__host__ __device__ inline void intersectBVH(Ray& ray,
+                                             const BVHNode* bvh,
+                                             const TriangleClass* primitives,
+                                             HitRecord& hitRecord,
+                                             uint& count) {
+  BVHNode node = bvh[0u];
+
   uint stack[STACK_SIZE];
-  // Start with root node on the stack
-  int stackIdx{0};
+  uint8_t stackIdx{0u};
 
   while (1) {
     // If leaf node, intersect with primitives
@@ -124,12 +122,10 @@ __device__ inline void intersectBVH(
       }
 
       // If stack is empty, exit loop. Else grab next element on stack
-      if (stackIdx <= 0) {
+      if (stackIdx == 0u) {
         break;
-      } else {
-        node = bvh[stack[--stackIdx]];
       }
-      // Skip to the start of the loop
+      node = bvh[stack[--stackIdx]];
       continue;
     }
 
@@ -148,34 +144,34 @@ __device__ inline void intersectBVH(
     // If closer node is missed, the farther one is as well
     if (dist1 == FLT_MAX) {
       // Exit if stack empty or grab next element
-      if (stackIdx <= 0) {
+      if (stackIdx == 0u) {
         break;
-      } else {
-        node = bvh[stack[--stackIdx]];
       }
-    } else {
-      // If closer node is hit, consider it for the next loop
-      node = bvh[idx1];
-      count++;
+      node = bvh[stack[--stackIdx]];
+      continue;
+    }
+    // If closer node is hit, consider it for the next loop
+    node = bvh[idx1];
+    count++;
 
-      // If the farther node is hit, place it on the stack
-      if (dist2 != FLT_MAX) {
-        count++;
-        stack[stackIdx++] = idx2;
-      }
+    // If the farther node is hit, place it on the stack
+    if (dist2 != FLT_MAX) {
+      count++;
+      stack[stackIdx++] = idx2;
     }
   }
 }
 
-__device__ inline uint intersectTLAS(Ray& ray,
-                                     const BVHNode* tlas,
-                                     const GPUMesh* meshes,
-                                     HitRecord& closestHit,
-                                     uint& count) {
-  BVHNode node = tlas[0];
+template <typename MeshClass>
+__host__ __device__ inline uint intersectTLAS(Ray& ray,
+                                              const BVHNode* tlas,
+                                              const MeshClass* meshes,
+                                              HitRecord& closestHit,
+                                              uint& count) {
+  BVHNode node = tlas[0u];
+
   uint stack[STACK_SIZE];
-  // Start with root node on the stack
-  int stackIdx{0};
+  uint8_t stackIdx{0};
   uint meshIndex{UINT_MAX};
   HitRecord hitRecord = closestHit;
   float closestDist{FLT_MAX};
@@ -194,12 +190,10 @@ __device__ inline uint intersectTLAS(Ray& ray,
       }
 
       // If stack is empty, exit loop. Else grab next element on stack
-      if (stackIdx <= 0) {
+      if (stackIdx == 0u) {
         break;
-      } else {
-        node = tlas[stack[--stackIdx]];
       }
-      // Skip to the start of the loop
+      node = tlas[stack[--stackIdx]];
       continue;
     }
 
@@ -218,21 +212,21 @@ __device__ inline uint intersectTLAS(Ray& ray,
     // If closer node is missed, the farther one is as well
     if (dist1 == FLT_MAX) {
       // Exit if stack empty or grab next element
-      if (stackIdx <= 0) {
+      if (stackIdx == 0u) {
         break;
-      } else {
-        node = tlas[stack[--stackIdx]];
       }
-    } else {
-      // If closer node is hit, consider it for the next loop
-      node = tlas[idx1];
-      count++;
+      node = tlas[stack[--stackIdx]];
+      continue;
+    }
 
-      // If the farther node is hit, place it on the stack
-      if (dist2 != FLT_MAX) {
-        count++;
-        stack[stackIdx++] = idx2;
-      }
+    // If closer node is hit, consider it for the next loop
+    node = tlas[idx1];
+    count++;
+
+    // If the farther node is hit, place it on the stack
+    if (dist2 != FLT_MAX) {
+      count++;
+      stack[stackIdx++] = idx2;
     }
   }
   return meshIndex;

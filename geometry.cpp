@@ -104,7 +104,7 @@ void Geometry::generateNormals() {
 }
 
 void Geometry::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
-  intersectBVH(ray, bvh, primitives, 0, hitRecord, count);
+  intersectBVH(ray, bvh, primitives, hitRecord, count);
 }
 
 GPUGeometry::GPUGeometry(const Geometry& geometry) {

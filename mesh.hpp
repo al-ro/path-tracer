@@ -66,7 +66,7 @@ class GPUMesh {
   // Device pointer to an externally managed GPUMaterial.
   GPUMaterial* material = nullptr;
 
-  // mat4 normalMatrix = transpose(invModelMatrix);
+  mat4 normalMatrix = transpose(invModelMatrix);
 
   GPUMesh() = delete;
   GPUMesh(const Mesh& mesh, GPUGeometry* geometry, GPUMaterial* material);
