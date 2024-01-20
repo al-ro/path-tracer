@@ -86,7 +86,7 @@ vec3 getIllumination(Ray ray,
       const Mesh& mesh{scene.meshes[meshIdx]};
 
       vec3 p = ray.origin + ray.direction * ray.t;
-      vec3 N = normalize(vec3(transpose(mesh.invModelMatrix) * vec4(mesh.geometry->getNormal(closestHit.hitIndex, closestHit.barycentric), 0.0f)));
+      vec3 N = normalize(vec3(mesh.normalMatrix * vec4(mesh.geometry->getNormal(closestHit.hitIndex, closestHit.barycentric), 0.0f)));
       if (dot(ray.direction, N) > 0.0f) {
         N = -N;
       }
