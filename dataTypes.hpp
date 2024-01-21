@@ -69,7 +69,7 @@ struct VertexAttributes {
 };
 
 // Bounding volume hierarchy node
-struct ALIGN(8) BVHNode {
+struct ALIGN(16) BVHNode {
   AABB aabb;
   // Index of first primitive or left child
   uint leftFirst;
