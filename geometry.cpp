@@ -114,25 +114,25 @@ GPUGeometry::GPUGeometry(const Geometry& geometry) {
     gpuTriangles.push_back(GPUTriangle{tri.v0, tri.v1, tri.v2});
   }
 
-  CHECK_CUDA_ERROR(cudaMalloc((void**)&primitives, gpuTriangles.size() * sizeof(GPUTriangle)));
+  CHECK_CUDA_ERROR(cudaMalloc(&primitives, gpuTriangles.size() * sizeof(GPUTriangle)));
   CHECK_CUDA_ERROR(cudaMemcpy(primitives, gpuTriangles.data(), gpuTriangles.size() * sizeof(GPUTriangle), cudaMemcpyHostToDevice));
 
-  CHECK_CUDA_ERROR(cudaMalloc((void**)&bvh, geometry.bvh.size() * sizeof(BVHNode)));
+  CHECK_CUDA_ERROR(cudaMalloc(&bvh, geometry.bvh.size() * sizeof(BVHNode)));
   CHECK_CUDA_ERROR(cudaMemcpy(bvh, geometry.bvh.data(), geometry.bvh.size() * sizeof(BVHNode), cudaMemcpyHostToDevice));
 
   if (geometry.attributes.normals.size() > 0.0) {
     hasNormals = true;
-    CHECK_CUDA_ERROR(cudaMalloc((void**)&vertexNormals, geometry.attributes.normals.size() * sizeof(vec3)));
+    CHECK_CUDA_ERROR(cudaMalloc(&vertexNormals, geometry.attributes.normals.size() * sizeof(vec3)));
     CHECK_CUDA_ERROR(cudaMemcpy(vertexNormals, geometry.attributes.normals.data(), geometry.attributes.normals.size() * sizeof(vec3), cudaMemcpyHostToDevice));
 
   } else {
-    CHECK_CUDA_ERROR(cudaMalloc((void**)&faceNormals, geometry.faceNormals.size() * sizeof(vec3)));
+    CHECK_CUDA_ERROR(cudaMalloc(&faceNormals, geometry.faceNormals.size() * sizeof(vec3)));
     CHECK_CUDA_ERROR(cudaMemcpy(faceNormals, geometry.faceNormals.data(), geometry.faceNormals.size() * sizeof(vec3), cudaMemcpyHostToDevice));
   }
 
   if (geometry.attributes.texCoords.size() > 0.0) {
     hasTexCoords = true;
-    CHECK_CUDA_ERROR(cudaMalloc((void**)&texCoords, geometry.attributes.texCoords.size() * sizeof(vec2)));
+    CHECK_CUDA_ERROR(cudaMalloc(&texCoords, geometry.attributes.texCoords.size() * sizeof(vec2)));
     CHECK_CUDA_ERROR(cudaMemcpy(texCoords, geometry.attributes.texCoords.data(), geometry.attributes.texCoords.size() * sizeof(vec2), cudaMemcpyHostToDevice));
   }
 }

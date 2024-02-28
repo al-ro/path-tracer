@@ -55,10 +55,10 @@ uint Scene::intersect(Ray& ray, HitRecord& hitRecord, uint& count) const {
 }
 
 GPUScene::GPUScene(const Scene& scene, const std::vector<GPUMesh>& gpuMeshes) {
-  CHECK_CUDA_ERROR(cudaMalloc((void**)&meshes, gpuMeshes.size() * sizeof(GPUMesh)));
+  CHECK_CUDA_ERROR(cudaMalloc(&meshes, gpuMeshes.size() * sizeof(GPUMesh)));
   CHECK_CUDA_ERROR(cudaMemcpy(meshes, gpuMeshes.data(), gpuMeshes.size() * sizeof(GPUMesh), cudaMemcpyHostToDevice));
 
-  CHECK_CUDA_ERROR(cudaMalloc((void**)&tlas, scene.tlas.size() * sizeof(BVHNode)));
+  CHECK_CUDA_ERROR(cudaMalloc(&tlas, scene.tlas.size() * sizeof(BVHNode)));
   CHECK_CUDA_ERROR(cudaMemcpy(tlas, scene.tlas.data(), scene.tlas.size() * sizeof(BVHNode), cudaMemcpyHostToDevice));
 }
 GPUScene::~GPUScene() {
