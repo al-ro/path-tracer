@@ -115,10 +115,10 @@ Running outputs parameters and progress to the console
 
 Resulting image is output as *output.bmp*
 
-- make clean (to remove old executable)
-- make build
-- make run (with default settings)
-- make all (clean, build, run)
+- `make clean` (to remove old executable)
+- `make build`
+- `make run` (with default settings)
+- `make all` (clean, build, run)
 - `./PathTracer <options>`
     - `-d` 0: CUDA (default), 1: CPU
     - `-w` width of rendered image (e.g. `-w 512`)
