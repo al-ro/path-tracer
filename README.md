@@ -118,14 +118,14 @@ Resulting image is output as *output.bmp*
 - make build
 - make run (with default settings)
 - make all (clean, build, run)
-- ./PathTracer \[options\]
-    - *-w* width of rendered image (e.g. -w 512)
-    - *-h* height of rendered image
-    - *-s* samples per pixel
-    - *-b* maximum bounces per ray per sample
-    - *-t* number of threads
-    - *-p* preset scene \[0, 2\]
-    - *-a* output BVH heatmap (ignores -s and -b)
+- `./PathTracer <options>`
+    - `-w` width of rendered image (e.g. `-w 512`)
+    - `-h` height of rendered image
+    - `-s` samples per pixel
+    - `-b` maximum bounces per ray per sample
+    - `-t` number of threads
+    - `-p` preset scene \[0, 2\]
+    - `-a` output BVH heatmap (ignores `-s` and `-b`)
 
 
 ## Dependencies
