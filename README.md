@@ -114,10 +114,10 @@ Running outputs parameters and progress to the console
 
 Resulting image is output as *output.bmp*
 
-- make clean (to remove old executable)
-- make build
-- make run (with default settings)
-- make all (clean, build, run)
+- `make clean` (to remove old executable)
+- `make build`
+- `make run` (with default settings)
+- `make all` (clean, build, run)
 - `./PathTracer <options>`
     - `-w` width of rendered image (e.g. `-w 512`)
     - `-h` height of rendered image
