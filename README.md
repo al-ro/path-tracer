@@ -119,7 +119,7 @@ Resulting image is output as *output.bmp*
 - make build
 - make run (with default settings)
 - make all (clean, build, run)
-- `./PathTracer \[options\]`
+- `./PathTracer <options>`
     - `-d` 0: CUDA (default), 1: CPU
     - `-w` width of rendered image (e.g. -w 512)
     - `-h` height of rendered image
