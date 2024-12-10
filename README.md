@@ -121,7 +121,7 @@ Resulting image is output as *output.bmp*
 - make all (clean, build, run)
 - `./PathTracer <options>`
     - `-d` 0: CUDA (default), 1: CPU
-    - `-w` width of rendered image (e.g. -w 512)
+    - `-w` width of rendered image (e.g. `-w 512`)
     - `-h` height of rendered image
     - `-s` samples per pixel
     - `-b` maximum bounces per ray per sample
